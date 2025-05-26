@@ -1,0 +1,20 @@
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sdal_builder"
+version = "0.2.0"
+dependencies = [
+  "osmium>=4.0",
+  "pyrosm>=0.6",
+  "geopandas>=0.14",
+  "shapely",
+  "scipy",
+  "bitstruct",
+    "bplustree",
+  "pycdlib",
+  "tqdm",
+  "requests",
+]

@@ -1,0 +1,11 @@
+
+osmium>=4.0
+pyrosm>=0.6
+geopandas>=0.14
+shapely
+scipy
+bitstruct
+bplustree
+pycdlib
+tqdm
+requests
