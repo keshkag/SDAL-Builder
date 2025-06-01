@@ -17,4 +17,5 @@ dependencies = [
   "pycdlib",
   "tqdm",
   "requests",
+  "dahuffman",
 ]

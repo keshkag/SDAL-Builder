@@ -9,3 +9,4 @@ bplustree
 pycdlib
 tqdm
 requests
+dahuffman

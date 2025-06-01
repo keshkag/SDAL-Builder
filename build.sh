@@ -1,14 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: ./build.sh <region1> [region2 ...] [<out_iso>]
+# Usage: ./build.sh [--clean] <region1> [region2 ...] [<out_iso>]
 # Examples:
 #   ./build.sh europe/cyprus
 #   ./build.sh europe/cyprus europe/spain
 #   ./build.sh europe/cyprus europe/spain mymaps.iso
+#   ./build.sh --clean
+
+# Change to the script’s directory (project root)
+cd "$(dirname "$0")"
+
+if [[ "${1-}" == "--clean" ]]; then
+  echo "Performing cleanup..."
+  # Remove Python bytecode caches
+  rm -rf src/sdal_builder/__pycache__
+
+  # Remove virtual environment
+  rm -rf .venv
+
+  # Remove build artifacts
+  rm -rf build
+  rm -rf *.iso
+
+  echo "Cleanup complete."
+  exit 0
+fi
 
 if [[ $# -lt 1 ]]; then
-  echo "Usage: $0 <region1> [region2 ...] [<out_iso>]"
+  echo "Usage: $0 [--clean] <region1> [region2 ...] [<out_iso>]"
   exit 1
 fi
 
