@@ -1,5 +1,7 @@
 # SDAL Builder
 
+> **⚠️ WARNING: This is a new and experimental solution. The codebase is untested in production environments and under active development. Use at your own risk, and always validate output before deploying or integrating into other systems! Bug reports and test feedback are very welcome.**
+
 **SDAL Builder** is an advanced, modular Python toolchain for building [SDAL Parcel Storage Format (PSF) v1.7](#sdal-parcel-storage-format-psf-v17) map archives from OpenStreetMap (OSM) data extracts.  
 It is designed for researchers, navigation developers, and simulation projects needing highly compressed, spatially indexed, verifiable map data—directly from OSM `.pbf` files.
 
@@ -12,6 +14,7 @@ It is designed for researchers, navigation developers, and simulation projects n
 - [Data Flow (How it Works)](#data-flow-how-it-works)
 - [Installation](#installation)
 - [Usage](#usage)
+- [Burning SDAL ISO Images](#burning-sdal-iso-images)
 - [Cleaning Up](#cleaning-up)
 - [File Structure](#file-structure)
 - [Frequently Asked Questions](#frequently-asked-questions)
@@ -134,6 +137,32 @@ After building, you can validate ISO file integrity:
 ```sh
 python validate_sdal_iso.py my_maps.iso
 ```
+
+---
+
+## Burning SDAL ISO Images
+
+To ensure maximum compatibility, always use a reliable ISO writing tool and avoid using "quick burn" or "multi-session" options.
+
+**Recommended steps:**
+
+1. **On Linux/macOS:**  
+   Use `dd` (replace `/dev/sdX` with your USB/SD/DVD device, and double-check your target!):
+   ```sh
+   sudo dd if=your_output.iso of=/dev/sdX bs=4M status=progress && sync
+   ```
+
+2. **On Windows:**  
+   Use a trusted tool like [Rufus](https://rufus.ie/) or [balenaEtcher](https://www.balena.io/etcher/) and select the "ISO image mode" (not "ISOHybrid" or other custom formats).  
+   Be sure to fully erase/re-format your target media before burning.
+
+3. **General recommendations:**
+   - Always safely eject the device after writing.
+   - Do not use tools that "modify" the ISO or add extra boot sectors unless specifically required.
+   - Test the media on the intended target system before deployment.
+
+> **Compatibility Note:**  
+> SDAL ISOs created by this project follow the SDAL PSF v1.7 spec, but downstream system compatibility may depend on SDAL implementation details, media quality, and burn method. If you encounter issues, try a different burning tool or medium.
 
 ---
 
