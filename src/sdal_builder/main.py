@@ -7,12 +7,12 @@ import pathlib
 import sys
 import json
 import warnings
-import os
-import struct
+from logging.handlers import RotatingFileHandler
 
 import requests
 import numpy as np
 import geopandas as gpd
+import struct
 from shapely.geometry import LineString, MultiLineString, box
 from tqdm import tqdm
 
@@ -30,7 +30,6 @@ from .etl import load_road_network, load_poi_data
 from .encoder import encode_strings, encode_road_records, encode_bytes
 from .spatial import build_kdtree, serialize_kdtree, build_bplustree, dump_bplustree
 from .iso import write_iso
-from logging.handlers import RotatingFileHandler
 
 def init_logging(verbose: bool, work_dir: pathlib.Path):
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -74,6 +73,18 @@ def fetch(region: str, dest: pathlib.Path) -> pathlib.Path:
     log.info("Saved %s (%.1f MB)", dest, dest.stat().st_size / 1e6)
     return dest
 
+def region_exists(region: str) -> bool:
+    """
+    Check whether the PBF for a given region slug is actually available.
+    We do a HEAD request on the expected Geofabrik URL.
+    """
+    url = f"https://download.geofabrik.de/{region}-latest.osm.pbf"
+    try:
+        r = requests.head(url, allow_redirects=True, timeout=10)
+        return r.status_code == 200
+    except Exception:
+        return False
+
 def build_manifest_payload(regions: list[str], filenames: list[str]) -> bytes:
     """
     Create a simple JSON manifest listing each filename.
@@ -85,6 +96,12 @@ def build_manifest_payload(regions: list[str], filenames: list[str]) -> bytes:
 
 def build(regions: list[str], out_iso: pathlib.Path, work: pathlib.Path):
     log = logging.getLogger(__name__)
+
+    # 0) Validate each region slug before doing any work
+    for region in regions:
+        if not region_exists(region):
+            log.error(f"Region slug '{region}' not found or not downloadable from Geofabrik.")
+            sys.exit(1)
 
     # Suppress Pyrosm’s chained‐assignment FutureWarning
     warnings.filterwarnings(
@@ -113,75 +130,62 @@ def build(regions: list[str], out_iso: pathlib.Path, work: pathlib.Path):
         centroids = [(pt.x, pt.y) for pt in roads["geometry"].centroid]
         kd = build_kdtree(centroids)
         kd_blob = serialize_kdtree(kd)
-
+        
         # ─── 2.b) Load all POIs from the same PBF ────────────────────────────────
         #     We now call load_poi_data with no extra arguments—our etl.py defaults cover all OSM POI keys.
         pois = load_poi_data(str(pbf), poi_tags=None)
         log.info(f"Loaded {len(pois)} POIs")
 
-        # Prepare a temporary list for POI‐related SDL files.
-        poi_files: list[pathlib.Path] = []
+        # Initialize the global_files list so we can append POI outputs immediately
+        global_files: list[pathlib.Path] = []
 
-        # ─── 2.c) Encode POI names into “POINAMES.SDL”
+        # ─── 2.c) Encode POI names into “POINAMES.SDL” ───────────────────────────
+        # Make sure we always have a 'name' column (etl.py guarantees this).
         poi_name_file = work / "POINAMES.SDL"
         poi_name_bytes = encode_strings(POI_NAME_PARCEL_ID, pois["name"].fillna("").tolist())
         poi_name_file.write_bytes(poi_name_bytes)
-        poi_files.append(poi_name_file)
+        global_files.append(poi_name_file)
 
         # ─── 2.d) Build B+ index & data blob for POI geometries ──────────────────
-        poi_records: list[tuple[int, bytes]] = []
-        poi_offsets: list[tuple[int, int]] = []
+        poi_records = []
+        poi_offsets = []
         offset_acc = 0
 
-        # If a leftover POI.bpt exists from a previous run, delete it first.
-        poi_idx_path = work / "POI.bpt"
-        if poi_idx_path.exists():
-            os.remove(str(poi_idx_path))
-
         for pid, geom in zip(pois.index, pois.geometry):
-            # Some POI geometries might be polygons; use centroid if no .x/.y directly.
-            if hasattr(geom, "x"):
-                lon, lat = geom.x, geom.y
-            else:
-                cent = geom.centroid
-                lon, lat = cent.x, cent.y
-
+            # If geometry isn't a Point, use its centroid
+            if not hasattr(geom, "x"):
+                geom = geom.centroid
+            lon, lat = geom.x, geom.y
+            # pack as two 32-bit ints: int(lat*1e6), int(lon*1e6)
             payload = struct.pack("<ii", int(lat * 1e6), int(lon * 1e6))
             poi_records.append((int(pid), payload))
             poi_offsets.append((int(pid), offset_acc))
-            offset_acc += len(payload) + 6  # leave space for a 6-byte record header
+            offset_acc += len(payload) + 6  # 6 bytes for any record header if needed
 
-        # Build a fresh B+ tree for POI offsets
+        poi_idx_path = work / "POI.bpt"
         build_bplustree(poi_offsets, str(poi_idx_path))
         poi_index_blob = dump_bplustree(str(poi_idx_path))
 
         poi_geom_file = work / "POIGEOM.SDL"
         with open(poi_geom_file, "wb") as f:
-            # First, write each POI’s geometry under POI_GEOM_PARCEL_ID
+            # Write each record’s payload under POI_GEOM_PARCEL_ID
             for pid, payload in poi_records:
                 f.write(encode_bytes(POI_GEOM_PARCEL_ID, payload))
-            # Then append the POI index under POI_INDEX_PARCEL_ID
+            # Append the B+ index under POI_INDEX_PARCEL_ID
             f.write(encode_bytes(POI_INDEX_PARCEL_ID, poi_index_blob))
-        poi_files.append(poi_geom_file)
+        global_files.append(poi_geom_file)
 
-        # —————————————————————————————————————————————————————————————————————————
         # 3) Prepare global SDLs (PID 0 → MTOC.SDL)
         filenames = ["MTOC.SDL", "CARTOTOP.SDL", "REGION.SDL", "REGIONS.SDL", "KDTREE.SDL"]
         for region in regions:
-            stem = pathlib.Path(region).name
+            stem = pathlib.Path(region).name.upper().replace("-", "_")
             filenames.extend([f"{stem}F.SDL", f"{stem}M.SDL"])
 
         mtoc = work / "MTOC.SDL"
         manifest = build_manifest_payload(regions, filenames)
         mtoc.write_bytes(encode_bytes(0, manifest))
 
-        global_files: list[pathlib.Path] = [mtoc]
-
-        # Now merge in our POI SDLs:
-        for pf in poi_files:
-            global_files.append(pf)
-
-        # Create the rest of the global SDLs exactly as before
+        global_files.append(mtoc)
         for name, pid, data in [
             ("CARTOTOP.SDL", CARTO_PARCEL_ID, b""),
             ("REGION.SDL", NAV_PARCEL_ID, b""),
@@ -194,7 +198,8 @@ def build(regions: list[str], out_iso: pathlib.Path, work: pathlib.Path):
 
         # —————————————————————————————————————————————————————————————————————————
         # 4) Generate a multi‐tile 256×256 density grid for each region (unchanged)…
-        #
+        #     [ …same as before … ]
+
         # Reproject roads into a local UTM CRS so that lengths are in meters.
         bbox = roads.total_bounds  # [minx, miny, maxx, maxy] in EPSG:4326
         minx, miny, maxx, maxy = bbox
@@ -276,7 +281,7 @@ def build(regions: list[str], out_iso: pathlib.Path, work: pathlib.Path):
 
                     # Write out one DENS tile per region (same geometry for all regions here)
                     for region in regions:
-                        code = pathlib.Path(region).name.upper()[:2]
+                        code = pathlib.Path(region).name.upper().replace("-", "_")[:2]
                         tile_id = ty * num_tiles + tx
                         dens_filename = f"DENS{code}{Z}{tile_id}.SDL"
                         dens_path = work / dens_filename
@@ -285,13 +290,12 @@ def build(regions: list[str], out_iso: pathlib.Path, work: pathlib.Path):
 
         # —————————————————————————————————————————————————————————————————————————
         # 5) Build per-region FAST & MAP SDLs (unchanged)
-        region_files: list[pathlib.Path] = []
+        region_files = []
         for region in regions:
-            stem = pathlib.Path(region).name
+            stem = pathlib.Path(region).name.upper().replace("-", "_")
 
             # FAST file: NAV (string names) + B+ index
             fast = work / f"{stem}F.SDL"
-            # Use fillna("") so that None → empty string
             fast.write_bytes(encode_strings(NAV_PARCEL_ID, roads['name'].fillna("").tolist()))
 
             records, offsets, off = [], [], 0
