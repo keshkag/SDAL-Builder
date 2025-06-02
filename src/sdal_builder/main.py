@@ -1,6 +1,8 @@
-# main.py
-
-"""CLI for building SDAL ISO images per region, embedding PID 0 in MTOC.SDL and generating density overlays."""
+#!/usr/bin/env python3
+"""
+CLI for building SDAL ISO images per region, embedding PID 0 in MTOC.SDL,
+generating multi‐tile density overlays, and including all OSM POIs.
+"""
 import argparse
 import logging
 import pathlib
@@ -12,9 +14,10 @@ from logging.handlers import RotatingFileHandler
 import requests
 import numpy as np
 import geopandas as gpd
-import struct
+import pandas as pd
 from shapely.geometry import LineString, MultiLineString, box
 from tqdm import tqdm
+import struct
 
 from .constants import (
     CARTO_PARCEL_ID,
@@ -31,6 +34,7 @@ from .encoder import encode_strings, encode_road_records, encode_bytes
 from .spatial import build_kdtree, serialize_kdtree, build_bplustree, dump_bplustree
 from .iso import write_iso
 
+
 def init_logging(verbose: bool, work_dir: pathlib.Path):
     work_dir.mkdir(parents=True, exist_ok=True)
     level = logging.DEBUG if verbose else logging.INFO
@@ -46,6 +50,7 @@ def init_logging(verbose: bool, work_dir: pathlib.Path):
     fh.setFormatter(logging.Formatter(fmt, datefmt))
     logging.getLogger().addHandler(fh)
 
+
 def _iter_coords(geom):
     if isinstance(geom, LineString):
         return list(geom.coords)
@@ -55,6 +60,7 @@ def _iter_coords(geom):
             coords.extend(part.coords)
         return coords
     return []
+
 
 def fetch(region: str, dest: pathlib.Path) -> pathlib.Path:
     url = f"https://download.geofabrik.de/{region}-latest.osm.pbf"
@@ -73,10 +79,10 @@ def fetch(region: str, dest: pathlib.Path) -> pathlib.Path:
     log.info("Saved %s (%.1f MB)", dest, dest.stat().st_size / 1e6)
     return dest
 
+
 def region_exists(region: str) -> bool:
     """
-    Check whether the PBF for a given region slug is actually available.
-    We do a HEAD request on the expected Geofabrik URL.
+    Check if the given region slug corresponds to a downloadable PBF on Geofabrik.
     """
     url = f"https://download.geofabrik.de/{region}-latest.osm.pbf"
     try:
@@ -85,6 +91,7 @@ def region_exists(region: str) -> bool:
     except Exception:
         return False
 
+
 def build_manifest_payload(regions: list[str], filenames: list[str]) -> bytes:
     """
     Create a simple JSON manifest listing each filename.
@@ -92,12 +99,13 @@ def build_manifest_payload(regions: list[str], filenames: list[str]) -> bytes:
     """
     entries = [{"name": fn} for fn in filenames]
     manifest = {"files": entries}
-    return json.dumps(manifest).encode('utf-8')
+    return json.dumps(manifest).encode("utf-8")
+
 
 def build(regions: list[str], out_iso: pathlib.Path, work: pathlib.Path):
     log = logging.getLogger(__name__)
 
-    # 0) Validate each region slug before doing any work
+    # 0) Validate that each region slug actually exists on Geofabrik
     for region in regions:
         if not region_exists(region):
             log.error(f"Region slug '{region}' not found or not downloadable from Geofabrik.")
@@ -117,50 +125,59 @@ def build(regions: list[str], out_iso: pathlib.Path, work: pathlib.Path):
     )
 
     work.mkdir(parents=True, exist_ok=True)
-    try:
-        # 1) Fetch & parse
-        pbf = fetch(regions[0], work / f"{regions[0].replace('/', '-')}.osm.pbf")
-        log.info("Parsing road network with Pyrosm")
-        roads = load_road_network(str(pbf))
-        log.info("Loaded %d road geometries", len(roads))
 
-        # —————————————————————————————————————————————————————————————————————————
-        # 2) Build global KD-tree (exactly as before)
+    try:
+        # 1) Fetch & parse roads from each region’s PBF, then concatenate
+        roads_list = []
+        for region in regions:
+            pbf_path = work / f"{region.replace('/', '-')}.osm.pbf"
+            pbf = fetch(region, pbf_path)
+            log.info("Parsing road network for %s with Pyrosm", region)
+            roads_df = load_road_network(str(pbf))
+            log.info("Loaded %d road geometries from %s", len(roads_df), region)
+            roads_list.append(roads_df)
+        roads = pd.concat(roads_list, ignore_index=True)
+        log.info("Total combined road geometries: %d", len(roads))
+
+        # 2) Build global KD-tree (on road centroids)
         log.info("Building global KD-tree")
         centroids = [(pt.x, pt.y) for pt in roads["geometry"].centroid]
         kd = build_kdtree(centroids)
         kd_blob = serialize_kdtree(kd)
-        
-        # ─── 2.b) Load all POIs from the same PBF ────────────────────────────────
-        #     We now call load_poi_data with no extra arguments—our etl.py defaults cover all OSM POI keys.
-        pois = load_poi_data(str(pbf), poi_tags=None)
-        log.info(f"Loaded {len(pois)} POIs")
 
-        # Initialize the global_files list so we can append POI outputs immediately
+        # 2.b) Load all POIs from each region’s PBF, then concatenate
+        poi_list = []
+        for region in regions:
+            pbf_path = work / f"{region.replace('/', '-')}.osm.pbf"
+            pois_df = load_poi_data(str(pbf_path), poi_tags=None)
+            log.info("Loaded %d POIs from %s", len(pois_df), region)
+            poi_list.append(pois_df)
+        pois = pd.concat(poi_list, ignore_index=True)
+        log.info("Total combined POIs: %d", len(pois))
+
+        # Initialize global_files list
         global_files: list[pathlib.Path] = []
 
-        # ─── 2.c) Encode POI names into “POINAMES.SDL” ───────────────────────────
-        # Make sure we always have a 'name' column (etl.py guarantees this).
+        # 2.c) Encode POI names → POINAMES.SDL
         poi_name_file = work / "POINAMES.SDL"
         poi_name_bytes = encode_strings(POI_NAME_PARCEL_ID, pois["name"].fillna("").tolist())
         poi_name_file.write_bytes(poi_name_bytes)
         global_files.append(poi_name_file)
 
-        # ─── 2.d) Build B+ index & data blob for POI geometries ──────────────────
+        # 2.d) Build B+ index & data blob for POI geometries → POIGEOM.SDL
         poi_records = []
         poi_offsets = []
         offset_acc = 0
 
         for pid, geom in zip(pois.index, pois.geometry):
-            # If geometry isn't a Point, use its centroid
+            # If geometry is not a Point, fall back to centroid
             if not hasattr(geom, "x"):
                 geom = geom.centroid
             lon, lat = geom.x, geom.y
-            # pack as two 32-bit ints: int(lat*1e6), int(lon*1e6)
             payload = struct.pack("<ii", int(lat * 1e6), int(lon * 1e6))
             poi_records.append((int(pid), payload))
             poi_offsets.append((int(pid), offset_acc))
-            offset_acc += len(payload) + 6  # 6 bytes for any record header if needed
+            offset_acc += len(payload) + 6  # 6 bytes reserved for per-record header if needed
 
         poi_idx_path = work / "POI.bpt"
         build_bplustree(poi_offsets, str(poi_idx_path))
@@ -168,15 +185,19 @@ def build(regions: list[str], out_iso: pathlib.Path, work: pathlib.Path):
 
         poi_geom_file = work / "POIGEOM.SDL"
         with open(poi_geom_file, "wb") as f:
-            # Write each record’s payload under POI_GEOM_PARCEL_ID
             for pid, payload in poi_records:
                 f.write(encode_bytes(POI_GEOM_PARCEL_ID, payload))
-            # Append the B+ index under POI_INDEX_PARCEL_ID
             f.write(encode_bytes(POI_INDEX_PARCEL_ID, poi_index_blob))
         global_files.append(poi_geom_file)
 
-        # 3) Prepare global SDLs (PID 0 → MTOC.SDL)
-        filenames = ["MTOC.SDL", "CARTOTOP.SDL", "REGION.SDL", "REGIONS.SDL", "KDTREE.SDL"]
+        # 3) Prepare global SDLs (PID 0 → MTOC.SDL, then core parcels)
+        filenames = [
+            "MTOC.SDL",
+            "CARTOTOP.SDL",
+            "REGION.SDL",
+            "REGIONS.SDL",
+            "KDTREE.SDL",
+        ]
         for region in regions:
             stem = pathlib.Path(region).name.upper().replace("-", "_")
             filenames.extend([f"{stem}F.SDL", f"{stem}M.SDL"])
@@ -184,8 +205,8 @@ def build(regions: list[str], out_iso: pathlib.Path, work: pathlib.Path):
         mtoc = work / "MTOC.SDL"
         manifest = build_manifest_payload(regions, filenames)
         mtoc.write_bytes(encode_bytes(0, manifest))
-
         global_files.append(mtoc)
+
         for name, pid, data in [
             ("CARTOTOP.SDL", CARTO_PARCEL_ID, b""),
             ("REGION.SDL", NAV_PARCEL_ID, b""),
@@ -196,11 +217,7 @@ def build(regions: list[str], out_iso: pathlib.Path, work: pathlib.Path):
             path.write_bytes(encode_bytes(pid, data))
             global_files.append(path)
 
-        # —————————————————————————————————————————————————————————————————————————
-        # 4) Generate a multi‐tile 256×256 density grid for each region (unchanged)…
-        #     [ …same as before … ]
-
-        # Reproject roads into a local UTM CRS so that lengths are in meters.
+        # 4) Generate multi‐tile 256×256 density grids for each zoom level 0..3
         bbox = roads.total_bounds  # [minx, miny, maxx, maxy] in EPSG:4326
         minx, miny, maxx, maxy = bbox
         center_x = (minx + maxx) / 2.0
@@ -212,11 +229,11 @@ def build(regions: list[str], out_iso: pathlib.Path, work: pathlib.Path):
         proj_bounds = roads_proj.total_bounds  # [pminx, pminy, pmaxx, pmaxy] in meters
         pminx, pminy, pmaxx, pmaxy = proj_bounds
 
-        # Explode any MultiLineStrings so we only work with LineString rows
         roads_simple = roads_proj.explode(ignore_index=True)
-        roads_simple = roads_simple[roads_simple.geometry.type.isin(["LineString", "MultiLineString"])]
+        roads_simple = roads_simple[
+            roads_simple.geometry.type.isin(["LineString", "MultiLineString"])
+        ]
 
-        # For Zoom levels 0..3, build 1, 4, 16, and 64 tiles respectively.
         for Z in range(0, 4):
             num_tiles = 2 ** Z
             tile_width = (pmaxx - pminx) / num_tiles
@@ -224,27 +241,25 @@ def build(regions: list[str], out_iso: pathlib.Path, work: pathlib.Path):
 
             for tx in range(num_tiles):
                 for ty in range(num_tiles):
-                    # Compute sub‐bbox for this tile at zoom Z
                     tminx = pminx + tx * tile_width
                     tmaxx = pminx + (tx + 1) * tile_width
                     tminy = pminy + ty * tile_height
                     tmaxy = pminy + (ty + 1) * tile_height
 
-                    # Build a 256×256 “pixel” grid inside [tminx..tmaxx] × [tminy..tmaxy]
                     grid_size = 256
                     dx = (tmaxx - tminx) / grid_size
                     dy = (tmaxy - tminy) / grid_size
 
-                    # Initialize a floating‐point array for road‐length accumulation
                     density_array = np.zeros((grid_size, grid_size), dtype=np.float64)
-
-                    # Clip roads to this tile’s bounding box
                     tile_box = box(tminx, tminy, tmaxx, tmaxy)
                     roads_clipped = roads_simple.geometry.intersection(tile_box)
 
-                    # Break each clipped geometry into small segments, assign midpoints to cells
                     max_seg_length = min(dx, dy) / 2.0
-                    for seg_geom in tqdm(roads_clipped, desc=f"Rasterizing Z{Z} tile ({tx},{ty})", leave=False):
+                    for seg_geom in tqdm(
+                        roads_clipped,
+                        desc=f"Rasterizing Z{Z} tile ({tx},{ty})",
+                        leave=False,
+                    ):
                         if seg_geom.is_empty:
                             continue
                         total_len = seg_geom.length
@@ -268,18 +283,13 @@ def build(regions: list[str], out_iso: pathlib.Path, work: pathlib.Path):
 
                             prev_pt = curr_pt
 
-                    # Scale to uint16 range
                     max_val = density_array.max()
-                    if max_val > 0:
-                        scale = 65535.0 / max_val
-                    else:
-                        scale = 0.0
-                    density_scaled = (density_array * scale).clip(0, 65535).astype(np.uint16)
-
-                    # Raw little‐endian uint16 bytes
+                    scale = 65535.0 / max_val if max_val > 0 else 0.0
+                    density_scaled = (
+                        (density_array * scale).clip(0, 65535).astype(np.uint16)
+                    )
                     raw_bytes = density_scaled.astype("<u2").tobytes()
 
-                    # Write out one DENS tile per region (same geometry for all regions here)
                     for region in regions:
                         code = pathlib.Path(region).name.upper().replace("-", "_")[:2]
                         tile_id = ty * num_tiles + tx
@@ -288,23 +298,25 @@ def build(regions: list[str], out_iso: pathlib.Path, work: pathlib.Path):
                         dens_path.write_bytes(encode_bytes(DENS_PARCEL_ID, raw_bytes))
                         global_files.append(dens_path)
 
-        # —————————————————————————————————————————————————————————————————————————
-        # 5) Build per-region FAST & MAP SDLs (unchanged)
-        region_files = []
+        # 5) Build per-region FAST & MAP SDLs (roads only)
+        region_files: list[pathlib.Path] = []
         for region in regions:
             stem = pathlib.Path(region).name.upper().replace("-", "_")
 
-            # FAST file: NAV (string names) + B+ index
+            # FAST file: NAV (road names + B+ index)
             fast = work / f"{stem}F.SDL"
-            fast.write_bytes(encode_strings(NAV_PARCEL_ID, roads['name'].fillna("").tolist()))
+            fast.write_bytes(encode_strings(NAV_PARCEL_ID, roads["name"].fillna("").tolist()))
 
-            records, offsets, off = [], [], 0
-            for wid, geom in tqdm(zip(roads['id'], roads.geometry), total=len(roads), unit='road'):
+            records = []
+            offsets = []
+            off = 0
+            for wid, geom in tqdm(zip(roads["id"], roads.geometry), total=len(roads), unit="road"):
                 coords = _iter_coords(geom)
                 records.append((wid, coords))
                 size = 6 + len(coords) * 16
                 offsets.append((wid, off))
                 off += size
+
             idx_path = work / f"{stem}.bpt"
             build_bplustree(offsets, str(idx_path))
             bt_blob = dump_bplustree(str(idx_path))
@@ -317,7 +329,6 @@ def build(regions: list[str], out_iso: pathlib.Path, work: pathlib.Path):
             mapf.write_bytes(encode_bytes(KDTREE_PARCEL_ID, kd_blob))
             region_files.append(mapf)
 
-        # —————————————————————————————————————————————————————————————————————————
         # 6) Master the ISO
         write_iso(global_files + region_files, out_iso)
         log.info("ISO built: %s", out_iso)
@@ -326,15 +337,17 @@ def build(regions: list[str], out_iso: pathlib.Path, work: pathlib.Path):
         log.exception("Build failed")
         raise
 
+
 def cli():
     parser = argparse.ArgumentParser(description="Build SDAL ISO per region")
-    parser.add_argument("regions", nargs='+', help="Geofabrik region slugs")
+    parser.add_argument("regions", nargs="+", help="Geofabrik region slugs (e.g. europe/cyprus)")
     parser.add_argument("--out", default="sdal.iso", help="Output ISO path")
     parser.add_argument("--work", default="build/tmp", help="Working directory")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose logging")
     args = parser.parse_args()
     init_logging(args.verbose, pathlib.Path(args.work))
     build(args.regions, pathlib.Path(args.out), pathlib.Path(args.work))
+
 
 if __name__ == "__main__":
     cli()

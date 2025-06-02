@@ -8,7 +8,7 @@ def load_road_network(pbf_path: str) -> gpd.GeoDataFrame:
     Use Pyrosm to extract the 'driving' road network as a GeoDataFrame.
     """
     osm = OSM(pbf_path)
-    roads = osm.get_network(network_type="driving")
+    roads = osm.get_network(network_type="driving",progress=True)
     return roads
 
 
@@ -42,7 +42,7 @@ def load_poi_data(pbf_path: str, poi_tags: list[str] | None = None) -> gpd.GeoDa
     custom_filter = {key: True for key in poi_tags}
 
     # Ask Pyrosm for POIs that have any of those keys:
-    poi = osm.get_pois(custom_filter=custom_filter)
+    poi = osm.get_pois(custom_filter=custom_filter,progress=True)
 
     # If Pyrosm returned nothing, create an empty GeoDataFrame with the right columns:
     if poi is None or poi.empty:
