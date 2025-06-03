@@ -1,73 +1,99 @@
-import geopandas as gpd
-from pyrosm import OSM
-from shapely.geometry import Point
-import pandas as pd
+# src/sdal_builder/etl.py
+#
+# Streaming-friendly implementation.
+# ----------------------------------
+# The original Pyrosm loading logic has been replaced with two lightweight
+# helpers from *sdal_osmium_stream.py*:
+#
+#     • extract_driving_roads()
+#     • extract_pois()
+#
+# Those helpers parse *.osm.pbf* files with **pyosmium** in true streaming
+# mode, so even very large regions (e.g. the full UK extract) no longer
+# blow up memory.  All downstream code continues to receive the same
+# GeoDataFrame formats as before.
+#
+from __future__ import annotations
 
+from typing import List, Optional
+
+import geopandas as gpd
+from shapely.geometry import Point
+
+from .sdal_osmium_stream import extract_driving_roads, extract_pois
+
+
+# --------------------------------------------------------------------------- #
+# Road network                                                                #
+# --------------------------------------------------------------------------- #
 def load_road_network(pbf_path: str) -> gpd.GeoDataFrame:
     """
-    Use Pyrosm to extract the 'driving' road network as a GeoDataFrame.
+    Return the *driving* road network for ``pbf_path`` as a GeoDataFrame.
+
+    The schema (columns / CRS) matches what the old Pyrosm-based implementation
+    produced: ``id``, ``name``, ``highway``, ``oneway``, and ``geometry``
+    (EPSG:4326).
     """
-    osm = OSM(pbf_path)
-    roads = osm.get_network(network_type="driving",progress=True)
-    return roads
+    return extract_driving_roads(pbf_path)
 
 
-def load_poi_data(pbf_path: str, poi_tags: list[str] | None = None) -> gpd.GeoDataFrame:
+# --------------------------------------------------------------------------- #
+# Points of Interest (POIs)                                                   #
+# --------------------------------------------------------------------------- #
+_DEFAULT_POI_TAGS: List[str] = [
+    "amenity",
+    "shop",
+    "tourism",
+    "leisure",
+    "historic",
+    "natural",
+    "man_made",
+]
+
+
+def load_poi_data(
+    pbf_path: str,
+    poi_tags: Optional[List[str]] = None,
+) -> gpd.GeoDataFrame:
     """
-    Extract POI nodes/ways in the PBF. If poi_tags is provided, only those OSM keys are requested;
-    otherwise, defaults to a standard set of POI keys.
+    Stream-extract POI nodes / ways with the given top-level keys.
 
-    Returns a GeoDataFrame with at least:
-      - 'geometry'    (POINT location)
-      - 'name'        (string, or NaN if missing)
-      - one column per requested POI key, if it actually exists
+    Parameters
+    ----------
+    pbf_path
+        Path to the *.osm.pbf* file.
+    poi_tags
+        List of tag keys to keep (e.g. ``["amenity", "shop"]``).  If *None*,
+        a sensible default set identical to the legacy implementation is used.
 
-    If Pyrosm returns None or empty, we still return a GeoDataFrame with 'geometry' and 'name' columns.
+    Returns
+    -------
+    GeoDataFrame
+        Columns:
+            * ``geometry`` (POINT, EPSG:4326)
+            * ``name``     (string)
+            * one column per requested tag key (may be entirely null)
     """
-    osm = OSM(pbf_path)
+    tags = poi_tags if poi_tags is not None else _DEFAULT_POI_TAGS
 
-    # If user passed a list of tags, use them; else default to common OSM POI keys:
-    if poi_tags is None:
-        poi_tags = [
-            "amenity",
-            "shop",
-            "tourism",
-            "leisure",
-            "historic",
-            "natural",
-            "man_made",
-        ]
+    poi = extract_pois(pbf_path, tags)
 
-    # Build a Pyrosm filter dict: {"amenity": True, "shop": True, ...}
-    custom_filter = {key: True for key in poi_tags}
+    # Guarantee every requested tag column exists, even if empty
+    for key in tags:
+        if key not in poi.columns:
+            poi[key] = None
 
-    # Ask Pyrosm for POIs that have any of those keys:
-    poi = osm.get_pois(custom_filter=custom_filter,progress=True)
+    # Ensure 'name' column exists
+    if "name" not in poi.columns:
+        poi["name"] = ""
 
-    # If Pyrosm returned nothing, create an empty GeoDataFrame with the right columns:
-    if poi is None or poi.empty:
-        # Ensure at least 'geometry' and 'name' exist:
-        cols = ["geometry", "name"] + [k for k in poi_tags]
-        return gpd.GeoDataFrame(columns=cols, geometry="geometry", crs="EPSG:4326")
+    # Build final column order: geometry ➔ name ➔ tag keys
+    ordered_cols = ["geometry", "name"] + [k for k in tags if k in poi.columns]
+    poi = poi[ordered_cols].copy()
 
-    # At this point, 'poi' is a GeoDataFrame. Make sure we keep 'geometry', 'name', plus any of the requested tags:
-    keep_cols = ["geometry"]
-    if "name" in poi.columns:
-        keep_cols.append("name")
+    # Convert any non-point geometries (e.g. polygon centroids) to centroids so
+    # the output remains consistent with historical behaviour.
+    if not poi.empty and not isinstance(poi.geometry.iloc[0], Point):
+        poi["geometry"] = poi.geometry.centroid
 
-    for key in poi_tags:
-        if key in poi.columns and key not in keep_cols:
-            keep_cols.append(key)
-
-    poi = poi[keep_cols].copy()
-
-    # If Pyrosm returned ways (LINESTRING/POLYGON) instead of points, convert to centroid:
-    #  (in practice, get_pois() usually yields POINT for node‐POIs and centroid for way‐POIs,
-    #   but we guard just in case.)
-    if not poi.empty:
-        first_geom = poi.geometry.iloc[0]
-        if not isinstance(first_geom, Point):
-            poi["geometry"] = poi.geometry.centroid
-
-    # Return a clean GeoDataFrame in EPSG:4326 with at least columns ['geometry','name', ...].
-    return gpd.GeoDataFrame(poi, geometry="geometry", crs="EPSG:4326")
+    return poi
