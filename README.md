@@ -1,6 +1,6 @@
 # SDAL Builder
 
-> **⚠️ WARNING: This is a new and experimental solution. The codebase is untested in production environments and under active development. Use at your own risk, and always validate output before deploying or integrating into other systems! Bug reports and test feedback are very welcome.**
+> **⚠️ WARNING: This is a new and experimental solution. The codebase is untested on real devices and under active development. Use at your own risk, even thought the worse case is a loss of blank disk, yet be careful! Bug reports and test feedback are very welcome.**
 
 **SDAL Builder** is an advanced, modular Python toolchain for building [SDAL Parcel Storage Format (PSF) v1.7](#sdal-parcel-storage-format-psf-v17) map archives from OpenStreetMap (OSM) data extracts.
 It is designed for researchers, navigation developers, and simulation projects needing highly compressed, spatially indexed, verifiable map data—directly from OSM `.pbf` files.
