@@ -23,7 +23,7 @@ from .oem_media_allocator import (
 from .oem_spatial_header import PCL
 
 REF_FAMILIES = ("chain_id", "feature_type", "facility_type", "attribute_value",
-                "language_code", "country_info", "time_zone", "dst")
+                "language_code", "country_info", "time_zone", "dst", "affix")
 # The first triple begins after normalized attrs (1024), ext bitmap (8),
 # int bitmap (4) and five Ushort metadata offset/count/hash fields (10).
 METADATA_LEVEL_AT = 1036
@@ -41,6 +41,7 @@ EXTERNAL_BITMAP_AT = 1024
 EXTERNAL_BITMAP_BYTES = 8
 INTERNAL_BITMAP_AT = 1032
 INTERNAL_BITMAP_BYTES = 4
+AFFIX_TRIPLE_AT = 1343     # §2.1.1.3: after firstIconParcelID
 REF = struct.Struct(">IHHH2s")         # RefDataIndex_t: 12 bytes
 LEVEL = struct.Struct(">HH")            # MetadataLevel_t: 4 bytes
 MODULE = struct.Struct(">HHHHII")       # MetadataModule_t: 16 bytes
@@ -336,7 +337,8 @@ def build_global_media_index(
             raise GlobalIndexError("Too many reference-data parcels")
         max_index = _check_ref_sequence(family, entries)
         start = put(b"".join(e.encode() for e in entries)) if entries else 0
-        struct.pack_into(">HHH", mutable, REF_TRIPLES_AT + i*6,
+        struct.pack_into(">HHH", mutable,
+                         REF_TRIPLES_AT + i*6 if i < 8 else AFFIX_TRIPLE_AT,
                          start, len(entries), max_index)
         owned_refs.append((family, entries))
 
@@ -393,7 +395,8 @@ def verify_global_media_index(out: BuiltGlobalIndex) -> None:
     for i,(name, entries) in enumerate(out.ref_tables):
         if name != REF_FAMILIES[i]:
             raise GlobalIndexError("Unexpected reference family order")
-        start,count,last = struct.unpack_from(">HHH",out.media_header,REF_TRIPLES_AT+i*6)
+        start,count,last = struct.unpack_from(">HHH",out.media_header,
+                    REF_TRIPLES_AT+i*6 if i < 8 else AFFIX_TRIPLE_AT)
         payload = visit(start,count,REF.size,name)
         if count != len(entries) or last != _check_ref_sequence(name,entries):
             raise GlobalIndexError("RefDataIndex counts or maxima disagree")
