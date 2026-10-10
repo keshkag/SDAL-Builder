@@ -219,7 +219,9 @@ def _build(template: TypedFixedHeader, *,
 
 
 def _read_block_array(raw: bytes, desc: tuple, *,
-                      minimum_id: bool, available: int) -> tuple[tuple[bytes, ...], tuple[int, ...]]:
+                      minimum_id: bool, available: int,
+                      header_size: int) -> tuple[tuple[bytes, ...], tuple[int, ...],
+                                                tuple[tuple[int, int], ...]]:
     if minimum_id:
         off, count, minimum, blocks, shift, max_rec, data, max_block = desc
         if minimum == 0:
@@ -230,13 +232,14 @@ def _read_block_array(raw: bytes, desc: tuple, *,
             or not 0 <= shift <= 8
             or blocks != (count + (1 << shift) - 1) // (1 << shift)):
         raise ParcelAssemblyError("Wrong declared record count/block geometry")
-    if off < 1 or off + 2 * blocks > available:
-        raise ParcelAssemblyError("Block-offset table outside used body")
+    if off < header_size or off + 2 * blocks > available:
+        raise ParcelAssemblyError("Block-offset table overlaps fixed header/escapes body")
     offsets = tuple(struct.unpack_from(">H", raw, off + i*2)[0]
                     for i in range(blocks))
     if data != offsets[0] or any(a >= b for a, b in zip(offsets, offsets[1:])):
         raise ParcelAssemblyError("Block data start/order disagrees with descriptor")
     records = []
+    occupied = [(off, off + 2 * blocks)]
     for i, start in enumerate(offsets):
         end = offsets[i+1] if i+1 < len(offsets) else available
         if not (off + 2 * blocks <= start < end <= available):
@@ -246,6 +249,7 @@ def _read_block_array(raw: bytes, desc: tuple, *,
         # canonical exact extent from the length prefix and record sizes.
         first, p = _measure_block(raw, start, actual_count, end)
         piece = raw[start:p]
+        occupied.append((start, p))
         result = decode_record_block(piece, actual_count)
         if result.first_record_offset != first:
             raise ParcelAssemblyError("Block prefix does not match")
@@ -310,12 +314,23 @@ def verify_bounded_parcel(raw: bytes, *, authority: SizeAuthority,
             raise ParcelAssemblyError("Cartographic position payload mismatch")
     decoded = {}
     offsets_by_kind = {}
+    occupied = [(0, header.size, "fixed typed header")]
+    if posat is not None:
+        occupied.append((posat, posat+count*3, "Cartographic Position array"))
     for name in active:
-        records, offsets = _read_block_array(raw, desc[name],
+        records, offsets, intervals = _read_block_array(raw, desc[name],
                  minimum_id=header.parcel_type == 0,
-                 available=posat if posat is not None else len(raw))
+                 available=posat if posat is not None else len(raw),
+                 header_size=header.size)
         decoded[name] = records
         offsets_by_kind[name] = offsets
+        occupied.extend((a,b,name) for a,b in intervals)
+        if expected_arrays is not None and records != expected_arrays[name]:
+            raise ParcelAssemblyError("Encoded record array differs from source: " + name)
+    occupied.sort()
+    if any(end > following_start
+           for (_,end,_),(following_start,_,_) in zip(occupied,occupied[1:])):
+        raise ParcelAssemblyError("Overlapping SDAL typed header, block or Position arrays")
         if expected_arrays is not None and records != expected_arrays[name]:
             raise ParcelAssemblyError("Encoded record array differs from source: " + name)
     spatial = decode_spatial_header(header.spatial_prefix)
