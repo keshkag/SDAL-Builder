@@ -5,6 +5,7 @@ on:
       - forensic/iter003-parcel-boundaries
       - forensic/iter004-header-evidence
       - forensic/iter005-size-constraints
+      - forensic/iter006-cross-release
   pull_request:
     paths:
       - 'tools/oem_*.py'
@@ -22,6 +23,6 @@ jobs:
         with:
           python-version: '3.12'
       - name: Check Python syntax
-        run: python3 -m compileall -q tools/oem_inventory.py tools/oem_catalog_decoder.py tools/oem_block_provenance.py tools/oem_parcel_boundaries.py tools/oem_header_evidence.py tools/oem_size_constraints.py
+        run: python3 -m compileall -q tools/oem_inventory.py tools/oem_catalog_decoder.py tools/oem_block_provenance.py tools/oem_parcel_boundaries.py tools/oem_header_evidence.py tools/oem_size_constraints.py tools/oem_cross_version.py
       - name: Run offline forensic regression tests
         run: python3 -m unittest discover -s tests -p 'test_oem_*.py' -v
