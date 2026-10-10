@@ -7,6 +7,7 @@ There is deliberately NO silent fallback to pure ISO9660.
 from __future__ import annotations
 
 import os
+import hashlib
 from pathlib import Path
 import re
 import shutil
@@ -89,7 +90,8 @@ def _udf_anchor(fd, lba: int) -> bool:
     return raw[4] == sum(raw[i] for i in range(16) if i != 4) & 255
 
 
-def _verify_hybrid(path: Path, expected: dict[str, int], volume_id: str) -> None:
+def _verify_hybrid(path: Path, expected: dict[str, int], volume_id: str,
+                   sources: dict[str, Path] | None = None) -> None:
     with path.open("rb") as fd:
         pvd, blocks, root, root_size = _descriptor(fd, 16, 1)
         svd, svd_blocks, jroot, jroot_size = _descriptor(fd, 17, 2)
@@ -106,9 +108,14 @@ def _verify_hybrid(path: Path, expected: dict[str, int], volume_id: str) -> None
             raise MasteringError("Volume labels in ISO/Joliet differ from requested label")
         iso = _entries(fd, root, root_size, joliet=False)
         joliet = _entries(fd, jroot, jroot_size, joliet=True)
-        if iso != joliet:
-            raise MasteringError("ISO/Joliet files and extents differ: " + repr(iso)[:750] + " vs " + repr(joliet)[:750])
-        normalized = {k.removesuffix(";1"): v for k, v in iso.items()}
+        # ISO9660 uses ;1 file-version suffixes, while genisoimage's
+        # Joliet bridge intentionally omits them. Compare canonical
+        # names and the physical data extents, not filename decorations.
+        iso_names = {k.removesuffix(";1"): v for k,v in iso.items()}
+        joliet_names = {k.removesuffix(";1"): v for k,v in joliet.items()}
+        if iso_names != joliet_names:
+            raise MasteringError("ISO/Joliet canonical SDL names or extents differ")
+        normalized = iso_names
         if set(normalized) != set(expected):
             raise MasteringError("ISO contains missing/unexpected SDL files")
         for name, (lba, length) in normalized.items():
@@ -132,6 +139,25 @@ def _verify_hybrid(path: Path, expected: dict[str, int], volume_id: str) -> None
             raise MasteringError("ISO header volume geometry does not match actual image")
         if not _udf_anchor(fd, blocks-1):
             raise MasteringError("Terminal UDF anchor at last sector missing")
+        if sources is not None:
+            if set(sources) != set(normalized):
+                raise MasteringError("Cannot compare ISO without all source files")
+            for name, (lba, length) in normalized.items():
+                fd.seek(lba*SECTOR)
+                digest_iso = hashlib.sha256()
+                left = length
+                while left:
+                    part = fd.read(min(left,1<<20))
+                    if not part:
+                        raise MasteringError("Truncated ISO data extent: "+name)
+                    digest_iso.update(part)
+                    left -= len(part)
+                digest_source = hashlib.sha256()
+                with sources[name].open("rb") as original:
+                    while part := original.read(1<<20):
+                        digest_source.update(part)
+                if digest_iso.digest() != digest_source.digest():
+                    raise MasteringError("Exact SDL payload hash mismatch: "+name)
 
 
 def build_iso(sdl_files: list[Path], out_iso: Path) -> None:
@@ -190,7 +216,7 @@ def build_iso(sdl_files: list[Path], out_iso: Path) -> None:
         if after != before:
             raise MasteringError("Source SDL changed during ISO mastering")
         _verify_hybrid(output, {name: status[0] for name,status in before.items()},
-                       requested_label)
+                       requested_label, sources)
         os.replace(output, out_iso)
     finally:
         output.unlink(missing_ok=True)
