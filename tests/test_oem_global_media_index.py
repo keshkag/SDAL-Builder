@@ -178,6 +178,25 @@ class GlobalIndexStructureTests(unittest.TestCase):
         with self.assertRaisesRegex(GlobalIndexError,"empty"):
             build_global_media_index(media_base(),references={})
 
+    def test_external_bitmap_reaches_real_physical_global_kd_region(self):
+        from test_oem_media_allocator import test_region
+        _,layout,region,_,_,_,_,_=test_region()
+        kd=layout.get("global-kd")
+        self.assertEqual(kd.pid,0x480000c2)
+        header=media_base(extra_bitmap=b"\xc0"+bytes(7))
+        positions=verify_region_root_order(media_header=header,
+                       index_root_pids=(kd.pid,kd.pid),
+                       global_kd_pid=kd.pid,
+                       region_bytes=region,sector_bytes=256)
+        self.assertEqual(positions,(0,1))
+        broken=bytearray(region)
+        broken[kd.start]^=1
+        with self.assertRaisesRegex(GlobalIndexError,"PID/region"):
+            verify_region_root_order(media_header=header,
+                index_root_pids=(kd.pid,kd.pid),
+                global_kd_pid=kd.pid,
+                region_bytes=bytes(broken),sector_bytes=256)
+
     def test_root_bitmap_maps_spatial_indices_to_same_physical_kd(self):
         # External index IDs: bit0, bit1 and bit10; stored in index-ID
         # ascending order, spatial indices 0/1 share same Global KD.
