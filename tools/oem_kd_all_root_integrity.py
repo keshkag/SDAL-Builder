@@ -132,10 +132,14 @@ def audit(path: Path) -> dict:
     verified = status["exact_two_byte_leaf"] + status["exact_graph_under_sdal_control_profile"]
     if verified + status["terminal_boundary_undetermined"] + status["unresolved_node_encoding"] != len(entries):
         raise GraphError("Root accounting mismatch")
+    whole_hash = sha256()
+    with path.open("rb") as source:
+        for fragment in iter(lambda: source.read(1 << 20), b""):
+            whole_hash.update(fragment)
     return {
         "source_file": path.name,
         "source_size": path.stat().st_size,
-        "source_sha256": sha256(path.read_bytes()).hexdigest(),
+        "source_sha256": whole_hash.hexdigest(),
         "index_parcels": len(indexes),
         "index_root_counts": [len(p["root_offsets"]) for p in indexes],
         "root_total": len(entries),
