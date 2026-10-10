@@ -41,6 +41,27 @@ class HybridISOTests(unittest.TestCase):
             self.assertNotEqual(before[:2048], b"")
             self.assertGreater(len(before), 1<<18)
 
+    def test_iso_payload_corruption_is_detected_by_sha256(self):
+        if not (shutil.which("genisoimage") or shutil.which("mkisofs")):
+            self.fail("Hybrid mastering executable missing")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = self._sources(root)
+            out = root / "WE_06Q4.iso"
+            build_iso(paths, out)
+            with out.open("r+b") as fd:
+                # Locate a known data byte using independently decoded ISO9660 root.
+                from sdal_builder.iso import _descriptor, _entries
+                _, _, loc, length = _descriptor(fd, 16, 1)
+                row = _entries(fd, loc, length, joliet=False)["BENELUX1.SDL;1"]
+                fd.seek(row[0] * 2048 + 10)
+                original = fd.read(1)
+                fd.seek(row[0] * 2048 + 10)
+                fd.write(bytes([original[0] ^ 0xFF]))
+            with self.assertRaisesRegex(MasteringError, "hash mismatch"):
+                _verify_hybrid(out, {p.name:p.stat().st_size for p in paths},
+                               "WE_06Q4", {p.name:p for p in paths})
+
     def test_invalid_input_fails_without_output(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
