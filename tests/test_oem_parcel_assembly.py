@@ -119,7 +119,7 @@ class PhysicalParcelAssemblyTests(unittest.TestCase):
             assemble_cartographic_roads(sample(1,0),cartographic(),
                  authority=authority(),file_offset=0x2100)
         with self.assertRaisesRegex(ParcelAssemblyError,"exceeds"):
-            assemble_cartographic_roads(sample(1,0),cartographic(),
+            assemble_cartographic_roads(sample(1,0),cartographic()*5,
                  authority=authority(256),file_offset=0x2000)
 
     def test_unsupported_cartography_cannot_drop_text_or_local_attributes(self):
