@@ -171,7 +171,9 @@ def ordered_root_index_types(bitmap: bytes) -> tuple[int, ...]:
 
 
 def verify_region_root_order(*, media_header: bytes, index_root_pids: tuple[int, ...],
-                             global_kd_pid: int) -> tuple[int, ...]:
+                             global_kd_pid: int,
+                             region_bytes: bytes | None = None,
+                             sector_bytes: int = 256) -> tuple[int, ...]:
     """Link the media external-index bitmap to a supplied region root array.
 
     Root offsets/count reside in GlbMapHeader_t, a separate authority.
@@ -192,6 +194,26 @@ def verify_region_root_order(*, media_header: bytes, index_root_pids: tuple[int,
             raise GlobalIndexError("Spatial root PID disagrees with Global KD authority")
         if not isinstance(pid, int) or not 0 <= pid <= 0xffffffff:
             raise GlobalIndexError("Root ParcelID is not an unsigned32 value")
+        if region_bytes is not None:
+            if sector_bytes not in (256,512,1024,2048):
+                raise GlobalIndexError("Invalid SDAL region sector size")
+            if pid & 0x80000000:
+                raise GlobalIndexError("External root requires validated region indirection")
+            start=(pid & 0xffffff)*sector_bytes
+            if not isinstance(region_bytes, bytes) or start+PCL.size>len(region_bytes):
+                raise GlobalIndexError("Root PID escapes physical region")
+            header=PCL.unpack_from(region_bytes,start)
+            if header[0]!=pid or header[3]!=1:
+                raise GlobalIndexError("Root PclHdr PID/region disagrees with bitmap entry")
+            if t<8:
+                from .oem_index import decode_index_parcel
+                if header[2]!=255:
+                    raise GlobalIndexError("Spatial root is not a type-255 KD index")
+                try:
+                    decode_index_parcel(region_bytes[start:start+0x5000],
+                                        absolute_offset=start)
+                except ValueError as exc:
+                    raise GlobalIndexError("Physical Global KD index is invalid") from exc
     return positions
 
 
