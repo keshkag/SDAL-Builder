@@ -13,7 +13,8 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from test_oem_typed_headers import sample
-from sdal_builder.oem_typed_headers import decode_typed_fixed_header
+from sdal_builder.oem_typed_headers import (decode_typed_fixed_header,
+    encode_typed_fixed_header)
 from sdal_builder.oem_spatial_header import PCL
 from sdal_builder.oem_typed_records import RoutingNodeBasic
 from sdal_builder.oem_route_segments import RoutingSegmentRegular
@@ -164,6 +165,44 @@ class PhysicalParcelAssemblyTests(unittest.TestCase):
                      authority=authority(),file_offset=0x2000)
         self.assertEqual(a,b)
         self.assertEqual(t,before)
+
+    def test_fixed_header_or_position_array_overlap_rejected(self):
+        item=assemble_cartographic_roads(sample(1,0),cartographic(),
+            authority=authority(),file_offset=0x2000)
+        header=decode_typed_fixed_header(item.blob)
+        for changed_name,changed_offset in (
+            ("lineDesc",header.size-2),
+            ("positionDesc",dict(header.descriptors)["lineDesc"][5])):
+            descriptions=dict(header.descriptors)
+            fields=list(descriptions[changed_name])
+            fields[0 if changed_name=="lineDesc" else 2]=changed_offset
+            descriptions[changed_name]=tuple(fields)
+            updated=replace(header,descriptors=tuple(
+                (name,descriptions[name]) for name,_ in header.descriptors))
+            raw=bytearray(item.blob)
+            raw[:header.size]=encode_typed_fixed_header(updated)
+            with self.subTest(changed_name=changed_name):
+                with self.assertRaises(ParcelAssemblyError):
+                    verify_bounded_parcel(bytes(raw),authority=authority(),
+                                          file_offset=0x2000)
+
+    def test_carto_and_routing_maxima_cannot_understate_real_counts(self):
+        for kind,raw,start in (
+            (1,assemble_cartographic_roads(sample(1,0),cartographic(),
+                 authority=authority(),file_offset=0x2000).blob,0x2000),
+            (0,assemble_routing_regular(route_template(),*routing(),
+                 minimum_node_id=1234,minimum_segment_id=8000,
+                 authority=authority(),file_offset=0x4000).blob,0x4000)):
+            header=decode_typed_fixed_header(raw)
+            lowered=list(header.maxima)
+            lowered[1]=0
+            bad=bytearray(raw)
+            bad[:header.size]=encode_typed_fixed_header(
+                replace(header,maxima=tuple(lowered)))
+            with self.subTest(kind=kind):
+                with self.assertRaisesRegex(ParcelAssemblyError,"maximum|Maxima|segments/node"):
+                    verify_bounded_parcel(bytes(bad),authority=authority(),
+                                          file_offset=start)
 
     def test_wrong_owner_type_is_rejected(self):
         with self.assertRaises(ParcelAssemblyError):
