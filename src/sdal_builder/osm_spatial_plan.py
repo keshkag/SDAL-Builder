@@ -199,6 +199,7 @@ def compile_planned_index(plan: Split, *,
     if set(parcel_refs)!=set(leaves):
         raise SpatialPlanError("Every terminal cell requires typed physical parcels")
     resolved={}
+    all_direct_ids=set()
     for path,leaf in leaves.items():
         refs=parcel_refs[path]
         if not refs or not all(isinstance(r,SpatialRef) for r in refs):
@@ -210,6 +211,9 @@ def compile_planned_index(plan: Split, *,
             raise SpatialPlanError("Duplicate physical Parcel ID")
         if any(r.parcel_id&0x80000000 for r in refs):
             raise SpatialPlanError("External ParcelID requires global indirection")
+        if any(r.parcel_id in all_direct_ids for r in refs):
+            raise SpatialPlanError("Direct Parcel ID reused across disjoint spatial cells")
+        all_direct_ids.update(r.parcel_id for r in refs)
         resolved[path]=tuple(refs)
     branches=[]
     def collect(node):
