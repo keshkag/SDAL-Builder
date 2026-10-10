@@ -19,7 +19,7 @@ def pack(offset: int, index: int, typ: int, region: int, descriptor: int) -> byt
 
 
 def fixture(sections: int, newer: bool) -> dict[str, bytes]:
-    assert sections in (16, 19)
+    assert sections in (16, 18, 19)
     size = 0x2000 + sections * 0x4000
     benelux = bytearray(size)
     france = bytearray(size)
@@ -28,7 +28,7 @@ def fixture(sections: int, newer: bool) -> dict[str, bytes]:
         france[off:off + 20] = pack(off, 56, 19, 0, 0)
     benelux[0x100] = 5
     france[0x100] = 9
-    carto = bytearray(184320 if newer else 159744)
+    carto = bytearray({16: 159744, 18: 225280, 19: 184320}[sections])
     candidate_list = (
         [(0x2000, 56), (0x6000, 56), (0xA000, 46),
          (0x12000, 0), (0x17E00, 45), (0x21B00, 52),
@@ -43,17 +43,14 @@ def fixture(sections: int, newer: bool) -> dict[str, bytes]:
     mtoc = bytearray(4096)
     mtoc[0x48:0x54] = b"BENELUX1.SDL"
     mtoc[0x58:0x5C] = bytes.fromhex("52000001")
-    init = bytearray(172032 if newer else 165888)
+    init = bytearray({16: 165888, 18: 169984, 19: 172032}[sections])
     init[0:4] = len(init).to_bytes(4, "big")
     init[8:12] = (0x12000).to_bytes(4, "big")
     init[12:16] = (0x94C).to_bytes(4, "big")
     init[0x12000:0x12000 + 0x94C] = mtoc[:0x94C]
     for dest, src in ((0x6000, 0x2000), (0xA000, 0x6000),
-                      (0xE000, 0x16000 if newer else 0x12000)):
-        copied_bytes = 0x3000 if (not newer and dest == 0xE000) else 0x4000
-        init[dest:dest + copied_bytes] = benelux[src:src + copied_bytes]
-    if not newer:
-        init[0x11000] = 0x7B  # fourth block is deliberately not a byte-identical copy
+                      (0xE000, 0x16000 if sections == 19 else 0x12000)):
+        init[dest:dest + 0x4000] = benelux[src:src + 0x4000]
     region = b"SDAL" + bytes([1 if newer else 2]) + bytes(4091)
     return {
         "INIT.SDL": bytes(init), "MTOC.SDL": bytes(mtoc),
@@ -96,8 +93,8 @@ class CrossVersionTests(unittest.TestCase):
         self.assertTrue(all(x["stored_address_points_to_benelux"] for x in o+n))
         old_fragment = next(x for x in o if x["init_offset"] == 0xE000)
         new_fragment = next(x for x in n if x["init_offset"] == 0xE000)
-        self.assertEqual(old_fragment["matching_complete_4k_blocks"], 3)
-        self.assertFalse(old_fragment["full_16k_identical"])
+        self.assertEqual(old_fragment["matching_complete_4k_blocks"], 4)
+        self.assertTrue(old_fragment["full_16k_identical"])
         self.assertEqual(new_fragment["matching_complete_4k_blocks"], 4)
         self.assertTrue(new_fragment["full_16k_identical"])
 

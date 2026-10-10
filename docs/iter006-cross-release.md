@@ -87,33 +87,24 @@ size tables, skipped candidates, or padding. None of these observations
 constitutes direct identification of ucaParcelSizes[] or a proof that
 the gap equals the actual serialized parcel length.
 
-## Reused sections are relocated, sometimes only partially
+## Reused sections are relocated (corrected by Iter007)
 
-Two full aligned 16-KiB relationships are unchanged and byte-identical
-in **both** releases:
+**Correction after a second independent read of the original OEM bytes:**
+the third matching section in OLDER_1 was incorrectly reported as only
+12 KiB in an earlier version of this document. In fact all **16 KiB
+are byte-for-byte identical**, as they are in WE_06Q4.
 
-- INIT 0x6000 ↔ BENELUX0 0x2000, 16 KiB.
-- INIT 0xA000 ↔ BENELUX0 0x6000, 16 KiB.
+- Both releases: INIT 0x6000 ↔ BENELUX0 0x2000, 16 KiB exact.
+- Both releases: INIT 0xA000 ↔ BENELUX0 0x6000, 16 KiB exact.
+- OLDER_1: INIT 0xE000 ↔ BENELUX0 0x12000, 16 KiB exact.
+- WE_06Q4: INIT 0xE000 ↔ BENELUX0 0x16000, 16 KiB exact.
 
-The third aligned region starts at INIT 0xE000 in both releases,
-but the region source moved:
+The corresponding source-address field is preserved within the copied
+INIT sections. This remains evidence of byte reuse, not proof of
+runtime pointers or a boot-loader algorithm.
 
-- **OLDER_1:** INIT 0xE000 ↔ BENELUX0 0x12000 has **three exact
-  contiguous 4-KiB blocks** (12 KiB); the fourth 4-KiB block differs.
-  The exact intra-block divergence offset remains to be measured by
-  executing the refined prefix-length scanner against original bytes.
-- **WE_06Q4:** INIT 0xE000 ↔ BENELUX0 0x16000 is **entirely identical
-  for 16 KiB** (four complete 4-KiB blocks).
-
-The embedded parcel-ID address at the start of each aligned matching
-prefix identifies the corresponding BENELUX0 source address, not the
-INIT destination. This is byte-level evidence of shared relocated
-content, **not** proof of a runtime pointer or boot-loader code.
-
-Earlier wording incorrectly described the older third fragment as a
-full 16-KiB copy. The Iter006 reader explicitly differentiates
-`exact_prefix_bytes`, `matching_complete_4k_blocks`, and
-`full_16k_identical` to prevent that interpretation.
+See `docs/iter007-three-release-evidence.md` for full three-release
+verification, including the independently supplied OLDER_2 disc.
 
 ## Validation, reproducibility and limits
 

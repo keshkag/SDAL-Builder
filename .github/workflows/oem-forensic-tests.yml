@@ -6,6 +6,7 @@ on:
       - forensic/iter004-header-evidence
       - forensic/iter005-size-constraints
       - forensic/iter006-cross-release
+      - forensic/iter007-three-release
   pull_request:
     paths:
       - 'tools/oem_*.py'
