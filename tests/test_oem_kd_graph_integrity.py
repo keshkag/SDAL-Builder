@@ -22,11 +22,11 @@ def index_bytes(physical: int, *, with_child_links: bool) -> bytes:
     raw[:20] = header
     if with_child_links:
         struct.pack_into(">HH", raw, 20, 3, 0)
-        struct.pack_into(">3H", raw, 24, 30, 42, 44)
+        struct.pack_into(">3H", raw, 24, 30, 46, 48)
         # Tree 0 has one internal branch and two child nodes.
         # Child A contains an external reference to index 1, tree 1.
-        raw[30:42] = bytes.fromhex("10a002051010000100011000")
-        raw[42:46] = bytes.fromhex("10001000")
+        raw[30:46] = bytes.fromhex("10a00207101000000000000100011000")
+        raw[46:50] = bytes.fromhex("10001000")
     else:
         struct.pack_into(">HH", raw, 20, 2, 0)
         struct.pack_into(">2H", raw, 24, 28, 30)
@@ -65,7 +65,7 @@ class KDGraphIntegrityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             path = fixture(Path(td))
             data = bytearray(path.read_bytes())
-            data[mod.INDEX_START+33] = 6  # right child at end of root
+            data[mod.INDEX_START+33] = 9  # right child beyond root
             path.write_bytes(data)
             with self.assertRaisesRegex(mod.GraphError, "local child"):
                 mod.audit_map(path)
@@ -74,7 +74,7 @@ class KDGraphIntegrityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             path = fixture(Path(td))
             data = bytearray(path.read_bytes())
-            data[mod.INDEX_START+38] = 5  # external index 5 does not exist
+            data[mod.INDEX_START+41] = 5  # external index 5 does not exist
             path.write_bytes(data)
             with self.assertRaisesRegex(mod.GraphError, "External KD"):
                 mod.audit_map(path)
@@ -111,6 +111,36 @@ class KDGraphIntegrityTests(unittest.TestCase):
         node = mod.parse_node(raw,0,len(raw))
         self.assertEqual(node["end"],8)
         self.assertEqual(node["entity_id_mode"],1)
+
+    def test_spec_equal_width_child_slots_and_pruned_left(self):
+        # SDAL 1.7 §3.1.1.2: both child offset FIELDS are 2 bytes.
+        # In this real-OEM-shaped example, 0000 belongs to the absent
+        # left child and 0003 is the right local offset (+6 bytes).
+        root = bytes.fromhex("1038000000031000")
+        node = mod.parse_node(root, 0, len(root))
+        self.assertEqual(node["child_slot_bytes"], 2)
+        self.assertEqual(node["pruned_slot_count"], 1)
+        self.assertEqual(node["edges"][0]["target"], 6)
+        self.assertEqual(node["edges"][0]["side"], "right")
+        # Old erroneous decoder would have interpreted 0000 as the
+        # right-child offset and invented a self-reference.
+        bad = bytes.fromhex("1038000100031000")
+        with self.assertRaisesRegex(mod.GraphError, "pruned"):
+            mod.parse_node(bad, 0, len(bad))
+
+    def test_padded_four_byte_slot_and_least_significant_child_bytes(self):
+        # 0x1050 => left external (4 bytes) + right local (1 byte).
+        raw = bytes.fromhex("105000010002000000031000")
+        node = mod.parse_node(raw, 0, len(raw))
+        self.assertEqual(node["child_slot_bytes"], 4)
+        self.assertEqual(len(node["edges"]), 2)
+        self.assertEqual(node["edges"][0]["index_delta"], 1)
+        self.assertEqual(node["edges"][0]["tree_id"], 2)
+        self.assertEqual(node["edges"][1]["offset_two_byte_units"], 3)
+        self.assertEqual(node["edges"][1]["target"], 6)
+        invalid = bytes.fromhex("105000010002000100031000")
+        with self.assertRaisesRegex(mod.GraphError, "high-order"):
+            mod.parse_node(invalid, 0, len(invalid))
 
     def test_corrupted_root_table_rejected(self):
         with tempfile.TemporaryDirectory() as td:
