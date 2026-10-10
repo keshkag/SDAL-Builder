@@ -57,13 +57,14 @@ def find_headers(data: bytes) -> list[dict]:
 
 
 def copied_regions(init: bytes, benelux: bytes) -> list[dict]:
+    """Compare whole aligned 16-KiB candidate sections only, not shifted windows."""
     results = []
     lookup = {}
-    for offset in range(0, len(benelux) - SECTION + 1, SECTION // 4):
+    for offset in range(0x2000, len(benelux) - SECTION + 1, SECTION):
         chunk = benelux[offset:offset + SECTION]
         if len(set(chunk)) > 1:
             lookup.setdefault(sha256(chunk).digest(), []).append(offset)
-    for dest in range(0, len(init) - SECTION + 1, SECTION // 4):
+    for dest in range(0x2000, len(init) - SECTION + 1, SECTION):
         chunk = init[dest:dest + SECTION]
         for source in lookup.get(sha256(chunk).digest(), []):
             if chunk != benelux[source:source + SECTION]:
