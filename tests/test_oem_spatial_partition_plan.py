@@ -132,7 +132,8 @@ class SpatialPlanTests(unittest.TestCase):
                 parcel_refs={"":(SpatialRef(1,0,0x18000020),)},
                 entity_id_bounds={})
         with self.assertRaisesRegex(SpatialPlanError,"smaller"):
-            plan_spatial_partition(Rect(0,0,128,128),(f,))
+            plan_spatial_partition(Rect(0,0,128,128),
+                                   (Footprint(2,1,0,1,1,2,2),))
 
     def test_ntu_conversion_uses_actual_sdal_scale(self):
         x=feature_from_osm_bounds(10,1,0,(33.2,34.4,33.3,34.5))
