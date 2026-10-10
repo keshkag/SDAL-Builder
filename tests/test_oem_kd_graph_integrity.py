@@ -129,8 +129,8 @@ class KDGraphIntegrityTests(unittest.TestCase):
             mod.parse_node(bad, 0, len(bad))
 
     def test_padded_four_byte_slot_and_least_significant_child_bytes(self):
-        # 0x1050 => left external (4 bytes) + right local (1 byte).
-        raw = bytes.fromhex("105000010002000000031000")
+        # 0x1060 => left external (4 bytes) + right local (1 byte).
+        raw = bytes.fromhex("106000010002000000031000")
         node = mod.parse_node(raw, 0, len(raw))
         self.assertEqual(node["child_slot_bytes"], 4)
         self.assertEqual(len(node["edges"]), 2)
@@ -138,7 +138,7 @@ class KDGraphIntegrityTests(unittest.TestCase):
         self.assertEqual(node["edges"][0]["tree_id"], 2)
         self.assertEqual(node["edges"][1]["offset_two_byte_units"], 3)
         self.assertEqual(node["edges"][1]["target"], 6)
-        invalid = bytes.fromhex("105000010002000100031000")
+        invalid = bytes.fromhex("106000010002000100031000")
         with self.assertRaisesRegex(mod.GraphError, "high-order"):
             mod.parse_node(invalid, 0, len(invalid))
 
