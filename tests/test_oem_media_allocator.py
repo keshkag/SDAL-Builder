@@ -177,6 +177,19 @@ class RegionAllocatorTests(unittest.TestCase):
         with self.assertRaisesRegex(MediaLayoutError,"PID"):
             layout.verify(bytes(bad))
 
+    def test_interior_cartographic_pointers_and_unknown_types_fail_publication(self):
+        table,layout,raw,_,_,_,_,_=test_region()
+        carto=layout.get("left-carto")
+        from sdal_builder.oem_typed_headers import decode_typed_fixed_header
+        header=decode_typed_fixed_header(raw[carto.start:carto.end])
+        table_at=dict(header.descriptors)["lineDesc"][0]
+        damaged=bytearray(raw)
+        damaged[carto.start+table_at] ^= 1
+        with self.assertRaisesRegex(MediaLayoutError,"physical graph"):
+            layout.verify(bytes(damaged))
+        with self.assertRaisesRegex(MediaLayoutError,"No verified physical"):
+            ParcelRequest("unsupported-crossroads",6,500,size_index=24)
+
     def test_index_fixed_reservation_prevents_dynamic_collision(self):
         t=MediaSizeTable(8,tuple([16]*8+[80]+[16]*16))
         with self.assertRaisesRegex(MediaLayoutError,"overlaps"):
