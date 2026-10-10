@@ -67,7 +67,7 @@ class KDIndexAssemblyTests(unittest.TestCase):
         # A genuine index parcel is 0x5000 bytes; overflow cannot truncate.
         with self.assertRaisesRegex(CodecError,"packing failed"):
             encode_index_from_nodes(file_offset=0xC200,
-                                    roots=((leaf(),)*12000,))
+                                    roots=tuple((leaf(),) for _ in range(6000)))
 
 
 if __name__=="__main__":
