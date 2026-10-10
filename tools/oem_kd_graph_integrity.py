@@ -243,7 +243,7 @@ def markdown(rows: dict[str, dict]) -> str:
     lines += ["", "## Unresolved", "",
               "- Remaining index roots are inventoried, not graph-validated.",
               "- No ISO-mastering changes or device compatibility claim."]
-    return "\\n".join(lines) + "\\n"
+    return "\n".join(lines) + "\n"
 
 
 def main() -> int:
@@ -262,10 +262,10 @@ def main() -> int:
                 raise GraphError("Empty or duplicate source label")
             records[label] = audit_map(Path(name))
     except (GraphError, OSError) as error:
-        parser.exit(2, "ERROR: " + str(error) + "\\n")
+        parser.exit(2, "ERROR: " + str(error) + "\n")
     args.json.parent.mkdir(parents=True, exist_ok=True)
     args.md.parent.mkdir(parents=True, exist_ok=True)
-    args.json.write_text(json.dumps(records, indent=2, sort_keys=True)+"\\n", encoding="utf-8")
+    args.json.write_text(json.dumps(records, indent=2, sort_keys=True)+"\n", encoding="utf-8")
     args.md.write_text(markdown(records), encoding="utf-8")
     print("Validated initial KD graph of", len(records), "OEM maps")
     return 0
