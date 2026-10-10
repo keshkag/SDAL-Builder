@@ -45,7 +45,7 @@ class CoverageTests(unittest.TestCase):
             src=fixture(Path(td))
             first = m.analyze({"A": src})["maps"]["A"]["coverage"]
             data=bytearray(src.read_bytes())
-            data[0xC200+42+1]=1
+            data[0xC200+46+1]=1
             src.write_bytes(data)
             second=m.analyze({"A": src})["maps"]["A"]["coverage"]
             self.assertEqual(first["root_total"], second["root_total"])
