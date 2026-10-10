@@ -32,8 +32,8 @@ def inspect_map(path: Path) -> dict:
         for tree_id, start in enumerate(locations):
             end = locations[tree_id + 1] if tree_id+1 < len(locations) else len(buf)
             raw = buf[start:end]
-            if not raw:
-                raise GraphError("Empty root in OEM root-offset table")
+            if len(raw) < 2:
+                raise GraphError("KD root shorter than the required two-byte control word")
             if len(raw) == 2 and raw == SINGLETON_LEAF:
                 totals["verified_singleton_0x1000"] += 1
             else:
