@@ -33,6 +33,16 @@ if [[ "${1-}" == "--clean" ]]; then
   exit 0
 fi
 
+# Hybrid ISO9660/Joliet/UDF mastering is a required part of an OEM build.
+# Check before expensive OSM download / geospatial processing.
+if ! command -v genisoimage >/dev/null 2>&1 && ! command -v mkisofs >/dev/null 2>&1; then
+  echo "ERROR: Required hybrid ISO mastering tool not installed." >&2
+  echo "  macOS/Homebrew: brew install cdrtools" >&2
+  echo "  Debian/Ubuntu: sudo apt-get install genisoimage" >&2
+  echo "Pure-ISO9660 fallback is not permitted for OEM output." >&2
+  exit 1
+fi
+
 # ----------------------------------------------------------------
 # Argument parser to reliably separate positional regions and flags + values.
 # The ISO output name is always the last positional argument, if present.

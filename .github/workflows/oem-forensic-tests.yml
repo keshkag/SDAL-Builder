@@ -13,6 +13,7 @@ on:
       - forensic/iter011-oem-iso-layout
       - forensic/iter012-oem-kd-index
       - forensic/iter013-kd-graph-integrity
+      - forensic/iter014-content-iso-bridge
   pull_request:
     paths:
       - 'tools/oem_*.py'
@@ -29,7 +30,25 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Check shell entrypoint syntax
+        run: bash -n build.sh
       - name: Check Python syntax
-        run: python3 -m compileall -q tools/oem_inventory.py tools/oem_catalog_decoder.py tools/oem_block_provenance.py tools/oem_parcel_boundaries.py tools/oem_header_evidence.py tools/oem_size_constraints.py tools/oem_cross_version.py tools/oem_init_spans.py tools/oem_init_pair_tables.py tools/oem_real_map_probe.py tools/oem_iso_layout.py tools/oem_kd_graph_integrity.py
+        run: python3 -m compileall -q tools/oem_inventory.py tools/oem_catalog_decoder.py tools/oem_block_provenance.py tools/oem_parcel_boundaries.py tools/oem_header_evidence.py tools/oem_size_constraints.py tools/oem_cross_version.py tools/oem_init_spans.py tools/oem_init_pair_tables.py tools/oem_real_map_probe.py tools/oem_iso_layout.py tools/oem_kd_graph_integrity.py tools/oem_kd_root_coverage.py src/sdal_builder/iso.py
+      - name: Install hybrid ISO mastering tool
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq genisoimage
       - name: Run offline forensic regression tests
         run: python3 -m unittest discover -s tests -p 'test_oem_*.py' -v
+
+  macos-hybrid-mastering:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install cdrtools
+        run: brew install cdrtools
+      - name: Exercise mkisofs hybrid mastering and byte-parity tests
+        run: python3 -m unittest discover -s tests -p 'test_oem_hybrid_mastering.py' -v
