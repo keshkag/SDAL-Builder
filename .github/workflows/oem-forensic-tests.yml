@@ -23,6 +23,7 @@ on:
       - forensic/iter021-line-segment-geometry
       - forensic/iter022-typed-parcel-assembly
       - forensic/iter023-global-size-allocator
+      - forensic/iter024-global-media-index
   pull_request:
     paths:
       - 'tools/oem_*.py'
@@ -42,7 +43,7 @@ jobs:
       - name: Check shell entrypoint syntax
         run: bash -n build.sh
       - name: Check Python syntax
-        run: python3 -m compileall -q tools/oem_inventory.py tools/oem_catalog_decoder.py tools/oem_block_provenance.py tools/oem_parcel_boundaries.py tools/oem_header_evidence.py tools/oem_size_constraints.py tools/oem_cross_version.py tools/oem_init_spans.py tools/oem_init_pair_tables.py tools/oem_real_map_probe.py tools/oem_iso_layout.py tools/oem_kd_graph_integrity.py tools/oem_kd_root_coverage.py tools/oem_kd_all_root_integrity.py tools/oem_kd_similarity_clusters.py tools/oem_kd_complete_graph.py tools/oem_spatial_encoder_parity.py tools/oem_maneuver_pid_spec_audit.py src/sdal_builder/osm_spatial_plan.py src/sdal_builder/oem_spatial_header.py src/sdal_builder/oem_typed_headers.py src/sdal_builder/oem_typed_records.py src/sdal_builder/oem_record_blocks.py src/sdal_builder/oem_line_geometry.py src/sdal_builder/oem_route_segments.py src/sdal_builder/osm_road_encoding.py src/sdal_builder/oem_parcel_assembly.py src/sdal_builder/oem_media_allocator.py tools/oem_media_size_evidence.py tools/oem_line_segment_evidence.py tools/oem_typed_parcel_evidence.py src/sdal_builder/oem_kd_codec.py src/sdal_builder/iso.py
+        run: python3 -m compileall -q tools/oem_inventory.py tools/oem_catalog_decoder.py tools/oem_block_provenance.py tools/oem_parcel_boundaries.py tools/oem_header_evidence.py tools/oem_size_constraints.py tools/oem_cross_version.py tools/oem_init_spans.py tools/oem_init_pair_tables.py tools/oem_real_map_probe.py tools/oem_iso_layout.py tools/oem_kd_graph_integrity.py tools/oem_kd_root_coverage.py tools/oem_kd_all_root_integrity.py tools/oem_kd_similarity_clusters.py tools/oem_kd_complete_graph.py tools/oem_spatial_encoder_parity.py tools/oem_maneuver_pid_spec_audit.py src/sdal_builder/osm_spatial_plan.py src/sdal_builder/oem_spatial_header.py src/sdal_builder/oem_typed_headers.py src/sdal_builder/oem_typed_records.py src/sdal_builder/oem_record_blocks.py src/sdal_builder/oem_line_geometry.py src/sdal_builder/oem_route_segments.py src/sdal_builder/osm_road_encoding.py src/sdal_builder/oem_parcel_assembly.py src/sdal_builder/oem_media_allocator.py src/sdal_builder/oem_global_media_index.py tools/oem_media_size_evidence.py tools/oem_line_segment_evidence.py tools/oem_typed_parcel_evidence.py src/sdal_builder/oem_kd_codec.py src/sdal_builder/iso.py
       - name: Install hybrid ISO mastering tool
         run: sudo apt-get update -qq && sudo apt-get install -y -qq genisoimage
       - name: Run offline forensic regression tests
