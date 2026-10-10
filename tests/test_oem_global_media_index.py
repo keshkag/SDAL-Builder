@@ -104,6 +104,17 @@ class GlobalIndexStructureTests(unittest.TestCase):
         with self.assertRaisesRegex(GlobalIndexError,"PID/region"):
             verify_global_reference_targets(idx,bytes(damaged))
 
+    def test_affix_refdata_uses_separate_fixed_header_triple(self):
+        affix=RefDataEntry(self.p1,20,24,0)
+        idx=build_global_media_index(media_base(),
+            references={"affix":(affix,)})
+        offset,count,last=struct.unpack_from(">HHH",idx.media_header,1343)
+        self.assertEqual((count,last),(1,0))
+        self.assertEqual(idx.index_parcel[offset:offset+12],affix.encode())
+        verify_global_media_index(idx)
+        verify_global_reference_targets(idx,reference_data_image(idx,{
+            0x1000:global_parcel(self.p1)}))
+
     def test_reference_interval_order_is_strict(self):
         bad=dict(self.refs)
         bad["feature_type"]=(
