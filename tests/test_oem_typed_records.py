@@ -66,7 +66,7 @@ class TypedRecordTests(unittest.TestCase):
         item=CartographicPointBasic(4,5243000,700100,0)
         raw=encode_carto_point_basic(item,min_lat_ntu=5242880,
                                      min_long_ntu=700000,scale=0)
-        self.assertEqual(raw.hex(),"04007803e80f0000")
+        self.assertEqual(raw.hex(),"04007800640f0000")
         self.assertEqual(decode_carto_point_basic(raw,min_lat_ntu=5242880,
                         min_long_ntu=700000),(item,len(raw)))
         with self.assertRaises(RecordError):
