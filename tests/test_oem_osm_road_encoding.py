@@ -60,7 +60,7 @@ class OSMRoadToSDALTests(unittest.TestCase):
     def test_input_coordinate_precision_and_clipping_must_be_exact(self):
         with self.assertRaisesRegex(RecordError,"outside physical"):
             self.encode(replace(self.road(),
-                vertices_ntu=((100,300),(108,292),(120,1080))))
+                vertices_ntu=((100,300),(108,1080),(120,280))))
         with self.assertRaisesRegex(RecordError,"endpoint"):
             self.encode(replace(self.road(),
                 vertices_ntu=((100,300),(108,292),(120,284))))
