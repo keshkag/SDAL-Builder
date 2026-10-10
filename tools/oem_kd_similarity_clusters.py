@@ -170,10 +170,16 @@ def inspect_map(path: Path) -> dict:
     }
 
 
-def compare(sources: dict[str, Path]) -> dict:
+def compare(sources: dict[str, Path], *,
+            require_unique_singleton_parent: bool = False) -> dict:
     if not sources:
         raise GraphError("At least one OEM map required")
     maps = {label: inspect_map(path) for label, path in sorted(sources.items())}
+    if require_unique_singleton_parent:
+        for label, row in maps.items():
+            if (row["singleton_roots_without_verified_parent"]
+                    or row["singleton_roots_with_multiple_verified_parents"]):
+                raise GraphError("Original-cohort singleton-link invariant failed: " + label)
     families = Counter()
     for source in maps.values():
         families.update(source["family_counts"])
@@ -233,6 +239,8 @@ def main() -> int:
     parser.add_argument("--map", action="append", required=True, metavar="LABEL=FILE")
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--md", type=Path, required=True)
+    parser.add_argument("--require-unique-singleton-parent", action="store_true",
+                        help="Source-cohort-specific invariant, NOT universal SDAL requirement")
     args = parser.parse_args()
     sources = {}
     try:
@@ -243,7 +251,8 @@ def main() -> int:
             if not label or label in sources:
                 raise GraphError("Empty or duplicate map label")
             sources[label] = Path(path)
-        result = compare(sources)
+        result = compare(sources,
+                         require_unique_singleton_parent=args.require_unique_singleton_parent)
     except (GraphError, OSError) as err:
         parser.exit(2, "ERROR: " + str(err) + "\n")
     args.json.parent.mkdir(parents=True, exist_ok=True)
