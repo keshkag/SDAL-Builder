@@ -101,6 +101,8 @@ class ParcelRequest:
         if not isinstance(self.key,str) or not self.key or self.key.strip()!=self.key:
             raise MediaLayoutError("Stable nonblank parcel key required")
         _u("parcel type",self.parcel_type,0,255)
+        if self.parcel_type not in (0,1,255):
+            raise MediaLayoutError("No verified physical payload producer for requested parcel type")
         _u("payload minimum",self.minimum_bytes,20,0xffffffff)
         if self.size_index is not None:_u("size index",self.size_index,0,63)
         if self.fixed_offset is not None:_u("fixed offset",self.fixed_offset,0,0xffffffff)
@@ -166,7 +168,15 @@ class RegionLayout:
             h=PCL.unpack_from(raw,p.start)
             if (h[0],h[2],h[3],h[4])!=(p.pid,p.parcel_type,1,0):
                 raise MediaLayoutError("Region byte-level PID/type/region mismatch")
-            if p.parcel_type==255:
+            if p.parcel_type in (0,1):
+                from .oem_parcel_assembly import verify_bounded_parcel
+                try:
+                    verify_bounded_parcel(raw[p.start:p.end],
+                        authority=self.table.size_authority(),file_offset=p.start)
+                except ValueError as exc:
+                    raise MediaLayoutError(
+                        "Typed spatial parcel physical graph failed verification: "+str(exc)) from exc
+            elif p.parcel_type==255:
                 from .oem_index import decode_index_parcel
                 decode_index_parcel(raw[p.start:p.end],absolute_offset=p.start)
 
