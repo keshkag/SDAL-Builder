@@ -185,8 +185,26 @@ def _build(template: TypedFixedHeader, *,
         buf.extend(positions)
         descriptors["positionDesc"] = (position_count, position_max, posat, b"\x00\x00")
         locations.append(("positionDesc", (posat,)))
+    # The typed maxima must describe the generated records; leaving zero
+    # would produce a byte-valid header with semantically false metadata.
+    if template.parcel_type == 1:
+        derived_maxima = (0, max(
+            decode_full_polyline(record, min_lat=spatial.bounding_rect.min_lat,
+                                 min_lon=spatial.bounding_rect.min_long,
+                                 scale=spatial.kd_fields[-2]).position_count
+            for record in arrays["lineDesc"]), 0, 0)
+    else:
+        decoded_nodes = [decode_route_node_basic(
+            record, min_lat_ntu=spatial.bounding_rect.min_lat,
+            min_long_ntu=spatial.bounding_rect.min_long,
+            scale=spatial.kd_fields[-2])[0]
+            for record in arrays["nodeDesc"]]
+        derived_maxima = (0, max(len(node.segment_indices)
+                                 for node in decoded_nodes),
+                          *([0] * 7))
     header = replace(template, descriptors=tuple(
-        (key, descriptors[key]) for key, _ in template.descriptors))
+        (key, descriptors[key]) for key, _ in template.descriptors),
+        maxima=derived_maxima)
     encoded_header = encode_typed_fixed_header(header)
     buf[:len(encoded_header)] = encoded_header
     used = len(buf)
@@ -300,6 +318,59 @@ def verify_bounded_parcel(raw: bytes, *, authority: SizeAuthority,
         offsets_by_kind[name] = offsets
         if expected_arrays is not None and records != expected_arrays[name]:
             raise ParcelAssemblyError("Encoded record array differs from source: " + name)
+    spatial = decode_spatial_header(header.spatial_prefix)
+    rect = spatial.bounding_rect
+    scale = spatial.kd_fields[-2]
+    if header.parcel_type == 1:
+        position_count, _, position_start, _ = desc["positionDesc"]
+        position_bytes = raw[position_start:position_start+position_count*3]
+        index = 0
+        for record in decoded["lineDesc"]:
+            line = decode_full_polyline(record, min_lat=rect.min_lat,
+                                        min_lon=rect.min_long, scale=scale)
+            if (line.text_offsets or line.position_count == 0
+                    or (line.attribute_index is not None and
+                        line.attribute_index > 255)):
+                raise ParcelAssemblyError("Cartographic ancillary arrays not present")
+            if line.position_offset != index:
+                raise ParcelAssemblyError("Polyline PositionOffset is not contiguous")
+            start = index*3
+            end = start + line.position_count*3
+            if end > len(position_bytes):
+                raise ParcelAssemblyError("Polyline points extend beyond PositionDesc")
+            points = decode_carto_positions(position_bytes[start:end],
+                        start_lat=line.start_lat, start_lon=line.start_lon,
+                        scale=scale)
+            if len(points) != line.position_count:
+                raise ParcelAssemblyError("Position record count incorrect")
+            if any(not (rect.min_lat <= p.latitude_ntu <= rect.max_lat and
+                        rect.min_long <= p.longitude_ntu <= rect.max_long)
+                   for p in points):
+                raise ParcelAssemblyError("Cartographic geometry escapes parcel bounds")
+            index += line.position_count
+        if index != position_count or header.maxima[1] < max(
+                decode_full_polyline(r, min_lat=rect.min_lat,
+                                     min_lon=rect.min_long,
+                                     scale=scale).position_count
+                for r in decoded["lineDesc"]):
+            raise ParcelAssemblyError("Cartographic descriptor count/maxima mismatch")
+    else:
+        nodes = []
+        for record in decoded["nodeDesc"]:
+            node, end = decode_route_node_basic(record,
+                    min_lat_ntu=rect.min_lat,
+                    min_long_ntu=rect.min_long,scale=scale)
+            if end != len(record):
+                raise ParcelAssemblyError("Unparsed routing node bytes")
+            nodes.append(node)
+        segments = tuple(decode_route_segment_regular(
+                 record,node_count=len(nodes))
+                 for record in decoded["segmentDesc"])
+        if any(s.attribute_index > 255 for s in segments):
+            raise ParcelAssemblyError("Local attributes missing")
+        verify_routing_node_segment_links(tuple(nodes),segments)
+        if header.maxima[1] < max(len(n.segment_indices) for n in nodes):
+            raise ParcelAssemblyError("Routing maximum segments/node understated")
     return {"parcel_id": pid, "type": header.parcel_type,
             "record_counts": {key: len(v) for key, v in decoded.items()},
             "block_offsets": offsets_by_kind}
