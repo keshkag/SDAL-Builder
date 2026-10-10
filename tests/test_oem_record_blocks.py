@@ -41,10 +41,11 @@ class TypedRecordBlockTests(unittest.TestCase):
                          for r in result.records),nodes)
 
     def test_type1_offset_transition_is_resolved_without_guessing(self):
-        records=(b"a"*237,b"b",b"c")
+        records=(b"a",)*240
         block=encode_record_block(records)
-        self.assertEqual(block.first_record_offset,5)
-        self.assertEqual(decode_record_block(block.raw,3).records,records)
+        self.assertEqual(block.first_record_offset,242)
+        self.assertEqual(block.raw[:2],bytes.fromhex("f002"))
+        self.assertEqual(decode_record_block(block.raw,240).records,records)
 
     def test_length_table_mismatches_are_rejected(self):
         source=encode_record_block((b"A",b"B"))
