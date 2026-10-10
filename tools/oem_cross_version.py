@@ -121,7 +121,7 @@ def profile(files: dict[str, bytes]) -> dict:
         "headers": hdrs,
         "region_layout": region_layout,
         "gap_units_by_size_index_unverified": {k: sorted(v) for k, v in sorted(gaps.items(), key=lambda x: int(x[0]))},
-        "init_benelux_exact_16k_copies": copied_regions(init, files["BENELUX0.SDL"]),
+        "init_benelux_aligned_prefix_matches": copied_regions(init, files["BENELUX0.SDL"]),
     }
 
 
@@ -191,7 +191,7 @@ def markdown(report: dict) -> str:
         for index, gaps in item["gap_units_by_size_index_unverified"].items():
             lines.append("- size index " + index + ": " + ", ".join(map(str, gaps)))
         lines += ["", "### Identical relocated 16-KiB sections", ""]
-        for item2 in item["init_benelux_exact_16k_copies"]:
+        for item2 in item["init_benelux_aligned_prefix_matches"]:
             lines.append(f"- INIT 0x{item2['init_offset']:X} ↔ BENELUX0 "
                          f"0x{item2['benelux_offset']:X} "
                          f"(identical prefix: {item2['exact_prefix_bytes']} bytes; "
