@@ -120,7 +120,9 @@ def analyze(files: dict[str, bytes], strict: bool = True) -> dict:
         "regions": all(r["matches_observed_19_by_16k"] and r["header_type_and_index"]
                        for r in regions.values()),
         "cartotop": carto == [(0x2000, 255, 56), (0x6000, 1, 56),
-                              (0xA000, 1, 46), (0x12000, 1, 0)],
+                              (0xA000, 1, 46), (0x12000, 1, 0),
+                              (0x17E00, 1, 45), (0x21B00, 1, 52),
+                              (0x25700, 1, 42), (0x28900, 1, 59)],
         "init_relations": all(r["equal"] and r["embedded_address_targets_source"]
                               and r["embedded_address_is_not_destination"]
                               for r in relocation),
