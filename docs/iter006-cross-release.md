@@ -87,23 +87,33 @@ size tables, skipped candidates, or padding. None of these observations
 constitutes direct identification of ucaParcelSizes[] or a proof that
 the gap equals the actual serialized parcel length.
 
-## Reused sections are relocated
+## Reused sections are relocated, sometimes only partially
 
-Two exact 16KiB copy relationships are unchanged:
+Two full aligned 16-KiB relationships are unchanged and byte-identical
+in **both** releases:
 
-- INIT 0x6000 ↔ BENELUX0 0x2000
-- INIT 0xA000 ↔ BENELUX0 0x6000
+- INIT 0x6000 ↔ BENELUX0 0x2000, 16 KiB.
+- INIT 0xA000 ↔ BENELUX0 0x6000, 16 KiB.
 
-The third exact 16KiB copy changes its source:
+The third aligned region starts at INIT 0xE000 in both releases,
+but the region source moved:
 
-- OLDER_1: INIT 0xE000 ↔ BENELUX0 0x12000
-- WE_06Q4: INIT 0xE000 ↔ BENELUX0 0x16000
+- **OLDER_1:** INIT 0xE000 ↔ BENELUX0 0x12000 has **three exact
+  contiguous 4-KiB blocks** (12 KiB); the fourth 4-KiB block differs.
+  The exact intra-block divergence offset remains to be measured by
+  executing the refined prefix-length scanner against original bytes.
+- **WE_06Q4:** INIT 0xE000 ↔ BENELUX0 0x16000 is **entirely identical
+  for 16 KiB** (four complete 4-KiB blocks).
 
-In all six copies, the raw parcel-ID address field embedded in the
-copied source section continues to identify the BENELUX0 source
-address, not the copied INIT address. This is **byte-level evidence of
-relocated shared content**; it is not a confirmed runtime pointer
-relationship or evidence of an executable boot loader.
+The embedded parcel-ID address at the start of each aligned matching
+prefix identifies the corresponding BENELUX0 source address, not the
+INIT destination. This is byte-level evidence of shared relocated
+content, **not** proof of a runtime pointer or boot-loader code.
+
+Earlier wording incorrectly described the older third fragment as a
+full 16-KiB copy. The Iter006 reader explicitly differentiates
+`exact_prefix_bytes`, `matching_complete_4k_blocks`, and
+`full_16k_identical` to prevent that interpretation.
 
 ## Validation, reproducibility and limits
 
