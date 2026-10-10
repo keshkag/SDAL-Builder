@@ -16,11 +16,11 @@ from sdal_builder.oem_line_geometry import (
 
 class CartographicGeometryTests(unittest.TestCase):
     def test_real_oem_shaped_full_nonnavigable_polyline(self):
-        # Independent source forensic observation:
-        # initial line of BENELUX1 type1 0x00092d7a, record length 10.
-        sample=FullPolyline(487,12,512,1022,False,0,0,19)
+        # Synthetic ten-byte control vector built from the SDAL grammar.
+        # The distinct original 7-record OEM cohort is verified separately.
+        sample=FullPolyline(400,12,512,1022,False,0,0,19)
         raw=encode_full_polyline(sample,min_lat=0,min_lon=0)
-        self.assertEqual(raw.hex(),"01e7000c020003fe0013")
+        self.assertEqual(raw.hex(),"0190000c020003fe0013")
         self.assertEqual(decode_full_polyline(raw,min_lat=0,min_lon=0),sample)
 
     def test_navigable_road_fields_and_canonical_offsets(self):
