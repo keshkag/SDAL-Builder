@@ -200,7 +200,7 @@ class PhysicalParcelAssemblyTests(unittest.TestCase):
             bad[:header.size]=encode_typed_fixed_header(
                 replace(header,maxima=tuple(lowered)))
             with self.subTest(kind=kind):
-                with self.assertRaisesRegex(ParcelAssemblyError,"maximum|Maxima|segments/node"):
+                with self.assertRaisesRegex(ParcelAssemblyError,"maxima|maximum"):
                     verify_bounded_parcel(bytes(bad),authority=authority(),
                                           file_offset=start)
 
