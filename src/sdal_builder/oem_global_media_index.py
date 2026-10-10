@@ -155,7 +155,7 @@ def validate_locale(raw: bytes) -> None:
         value = struct.unpack_from(">H", raw, 2 + 2*i)[0]
         if value >= 0x8000:
             # Negative signed Ushort is distance to an appended string.
-            destination = (-((value ^ 0xffff) + 1)) & 0xffff
+            destination = 0x10000 - value
             if not 514 <= destination < len(raw):
                 raise GlobalIndexError("Locale ligature offset is outside Strings[]")
             if b"\x00" not in raw[destination:]:
