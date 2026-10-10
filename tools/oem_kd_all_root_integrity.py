@@ -20,12 +20,16 @@ LEAF = b"\x10\x00"
 LIMIT_NODES = 15000
 
 
-def classify_root(indexes: list[dict], parcel_number: int, root_number: int) -> dict:
+def classify_root(indexes: list[dict], parcel_number: int, root_number: int,
+                  *, terminal_end: int | None = None) -> dict:
     parcel = indexes[parcel_number]
     starts = parcel["root_offsets"]
     start = starts[root_number]
     last = root_number + 1 == len(starts)
-    end = starts[root_number + 1] if not last else len(parcel["blob"])
+    end = (starts[root_number + 1] if not last
+           else terminal_end if terminal_end is not None else len(parcel["blob"]))
+    if end <= start or end > len(parcel["blob"]):
+        raise GraphError("Invalid authenticated/inferred root boundary")
     blob = parcel["blob"]
     raw = blob[start:end]
     if len(raw) < 2:
@@ -37,13 +41,16 @@ def classify_root(indexes: list[dict], parcel_number: int, root_number: int) -> 
         "source_sha256": sha256(raw).hexdigest(),
         "first_control_be16": f"0x{int.from_bytes(raw[:2], 'big'):04X}",
     }
-    if last:
-        # The last U16 root offset has no explicit end. All available OEM
-        # samples have index-parcel trailing FF padding, not a true root size.
-        # A guessed trim length must never be a proof of tree validity.
+    if last and terminal_end is None:
+        # Last root lacks an explicit end. Preserve this uncertainty unless
+        # caller supplies a separately justified/checked bound. Never make
+        # an inference by default in generic SDAL format decoding.
         return {**base, "status": "terminal_boundary_undetermined",
                 "reason": "last U16 root has no authenticated content end",
                 "trailing_ff_bytes": len(raw) - len(raw.rstrip(b"\xff"))}
+    if last:
+        base["terminal_bound_inferred_from_trailing_ff"] = True
+        base["trailing_ff_bytes"] = len(parcel["blob"]) - end
     if raw == LEAF:
         return {**base, "status": "exact_two_byte_leaf",
                 "node_count": 1, "local_edges": 0, "external_edges": 0}
