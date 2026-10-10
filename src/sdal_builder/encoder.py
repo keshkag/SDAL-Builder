@@ -42,11 +42,19 @@ def encode_bytes(
     if offset_units is None:
         offset_units = 0
 
-    # Обработка PID=0 (косвенная адресация)
+    # SDAL 1.7 ParcelID_t: bit31=external reference, bit30=redundancy,
+    # bits29..24=size index, bits23..0=sector offset OR external-index handle.
+    # Callers passing an already-composed nonzero PID retain that PID unchanged.
     if pid == 0:
-        final_pid = (offset_units & 0xFFFFFF) | (size_index << 24)
-        if external_to_region: final_pid |= 1 << 27
-        if redundancy: final_pid |= 1 << 28
+        if not isinstance(offset_units, int) or not 0 <= offset_units <= 0xFFFFFF:
+            raise ValueError("ParcelID offset/index must fit into 24 bits")
+        if not isinstance(size_index, int) or not 0 <= size_index <= 63:
+            raise ValueError("ParcelID size index must fit into 6 bits")
+        final_pid = offset_units | (size_index << 24)
+        if external_to_region:
+            final_pid |= 1 << 31
+        if redundancy:
+            final_pid |= 1 << 30
     else:
         final_pid = pid
 
