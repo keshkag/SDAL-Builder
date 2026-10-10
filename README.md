@@ -32,6 +32,7 @@ It is designed for researchers, navigation developers, and simulation projects n
 ## Features
 
 - **End-to-end OSM → SDAL pipeline:** Automates download, parsing, indexing, encoding, and ISO packaging.
+- **Verified hybrid ISO filesystem mastering:** The final stage uses `genisoimage` or `mkisofs` with UDF and Joliet, verifies both UDF anchors, ISO directory extents and full SHA-256 parity of each SDL payload. This verifies storage, **not** Denso firmware compatibility. Install `genisoimage` on Debian/Ubuntu or `cdrtools` (`mkisofs`) on macOS before invoking the unchanged one-command `build.sh` workflow.
 - **Structural compliance:** Generates structurally complete 512-byte headers (`GlbMediaHeader_t`, `RgnHdr_t`) with correctly populated PID size tables (`ucaParcelSizes`).
 - **Configurable format mode:**
   - **OEM mode** (default) — maintains compatibility with custom table files like `REGIONS.SDL`.
@@ -75,7 +76,7 @@ The project is structured as follows:
 | `src/sdal_builder/sdal_osmium_stream.py` | Streaming OSM processing with Osmium for large files and efficient memory usage. |
 | `src/sdal_builder/encoder.py` | Encodes roads, POIs, overlays, and metadata into compact SDAL binary parcels. |
 | `src/sdal_builder/spatial.py` | Builds and serializes spatial (KD-tree) and OSM Way ID (B+-tree) indexes.    |
-| `src/sdal_builder/iso.py` | Assembles all parcels and writes the SDAL-compliant ISO archive.                |
+| `src/sdal_builder/iso.py` | Produces verified hybrid ISO9660/Joliet/UDF images, enforcing input-SDL byte parity. |
 | `src/sdal_builder/constants.py` | SDAL Parcel IDs, version codes, and related constants.                     |
 | `src/sdal_builder/routing_format.py` | Structures and encoding for routing parcels.                         |
 | `src/sdal_builder/translations.py` | Localization tables for country name translation.                      |
