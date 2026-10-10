@@ -39,7 +39,7 @@ def inspect_map(path: Path) -> dict:
             else:
                 totals["unclassified_multibyte_root"] += 1
                 initial_control = int.from_bytes(raw[:2], "big") if len(raw) >= 2 else None
-                ff_tail = len(raw) - len(raw.rstrip(b"\\xff"))
+                ff_tail = len(raw) - len(raw.rstrip(b"\xff"))
                 complex_roots.append({
                     "index": index_id, "tree": tree_id,
                     "root_bytes_including_possible_padding": len(raw),
