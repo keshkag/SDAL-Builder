@@ -65,6 +65,8 @@ def encode_osm_road_records(
     if (road.vertices_ntu[0]!=source_nodes[road.from_node_index] or
         road.vertices_ntu[-1]!=source_nodes[road.to_node_index]):
         raise RecordError("OSM road vertices disagree with routing node coordinates")
+    if road.vertices_ntu[0]==road.vertices_ntu[-1]:
+        raise RecordError("Coincident geographic endpoints require explicit SDAL Z-level authority")
     if road.source_direction not in (1,2,3):
         raise RecordError("OSM travel permission must be explicit and nonzero")
     for lat,lon in road.vertices_ntu:
