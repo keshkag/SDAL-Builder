@@ -46,13 +46,15 @@ class SizeConstraintsTests(unittest.TestCase):
                           52: 60, 56: 64, 59: 71})
         i56 = next(row for row in result["index_constraints"] if row["size_index"] == 56)
         self.assertEqual(i56["observations"], 40)
-        self.assertIn("not verified", result["status"].replace("_", " "))
+        self.assertIn("not_a_decoded_ucaParcelSizes_table", result["status"])
 
     def test_header_endianness_and_self_address(self):
-        h = m.parse_candidate(header(0x17E00, 45, 1, 1, 0xB8), 0x17E00)
+        blob = bytearray(0x17E00 + 20)
+        blob[0x17E00:0x17E14] = header(0x17E00, 45, 1, 1, 0xB8)
+        h = m.parse_candidate(bytes(blob), 0x17E00)
         self.assertEqual(h["size_index"], 45)
         self.assertEqual(h["offset"], 0x17E00)
-        self.assertIsNone(m.parse_candidate(header(0x17E00, 45, 1, 1, 0xB8), 0x18000))
+        self.assertIsNone(m.parse_candidate(bytes(blob), 0x17D00))
 
     def test_injected_false_boundary_fails(self):
         files = donor()
