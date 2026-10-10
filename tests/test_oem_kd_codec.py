@@ -4,8 +4,11 @@ from __future__ import annotations
 import io
 import random
 import struct
+import sys
+from pathlib import Path
 import unittest
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from sdal_builder.oem_kd_codec import (
     CodecError, SpatialRef, KDChild, KDNode, encode_descriptor_list,
     decode_descriptor_list, encode_kd_node, decode_kd_node,
