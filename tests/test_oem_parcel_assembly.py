@@ -204,6 +204,20 @@ class PhysicalParcelAssemblyTests(unittest.TestCase):
                     verify_bounded_parcel(bytes(bad),authority=authority(),
                                           file_offset=start)
 
+    def test_bbox_violation_in_polyline_start_or_routing_node_is_rejected(self):
+        entries=cartographic()
+        outside=replace(entries[0],polyline=replace(
+            entries[0].polyline,start_lon=600000))
+        with self.assertRaisesRegex(ParcelAssemblyError,"Polyline start escapes"):
+            assemble_cartographic_roads(sample(1,0),(outside,),
+                authority=authority(),file_offset=0x2000)
+        nodes,segments=routing()
+        bad_nodes=(replace(nodes[0],longitude_ntu=600000),)+nodes[1:]
+        with self.assertRaisesRegex(ParcelAssemblyError,"Routing node escapes"):
+            assemble_routing_regular(route_template(),bad_nodes,segments,
+                minimum_node_id=1234,minimum_segment_id=8000,
+                authority=authority(),file_offset=0x4000)
+
     def test_wrong_owner_type_is_rejected(self):
         with self.assertRaises(ParcelAssemblyError):
             assemble_cartographic_roads(sample(0,0),cartographic(),
