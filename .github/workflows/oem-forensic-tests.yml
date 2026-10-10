@@ -16,6 +16,7 @@ on:
       - forensic/iter014-content-iso-bridge
       - forensic/iter015-kd-all-root-integrity
       - forensic/iter016-root-clusters
+      - forensic/iter017-spec-correct-kd
   pull_request:
     paths:
       - 'tools/oem_*.py'
