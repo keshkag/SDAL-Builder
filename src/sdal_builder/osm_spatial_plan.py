@@ -183,6 +183,7 @@ def leaf_inventory(plan: Leaf | Split) -> dict[str,Leaf]:
 def compile_planned_index(plan: Split, *,
                           parcel_refs: Mapping[str,tuple],
                           entity_id_bounds: Mapping[str,tuple[int,int]],
+                          target_file,
                           file_offset: int = 0xC200) -> bytes:
     """Compile an independently allocated OSM spatial plan to OEM index bytes.
 
@@ -192,7 +193,12 @@ def compile_planned_index(plan: Split, *,
     Explicit segment/node minima are required for any routing subtree.
     """
     from .oem_kd_codec import (KDNode,KDChild,SpatialRef,encode_kd_node,
-                               encode_index_from_nodes)
+                               encode_index_from_nodes,
+                               verify_direct_spatial_target)
+    if (target_file is None or not hasattr(target_file,"read")
+            or not hasattr(target_file,"seek")):
+        raise SpatialPlanError(
+            "Existing physical SDAL target file is required before KD index assembly")
     if not isinstance(plan,Split):
         raise SpatialPlanError("Single-leaf direct descriptor topology unverified")
     leaves=leaf_inventory(plan)
@@ -213,6 +219,11 @@ def compile_planned_index(plan: Split, *,
             raise SpatialPlanError("External ParcelID requires global indirection")
         if any(r.parcel_id in all_direct_ids for r in refs):
             raise SpatialPlanError("Direct Parcel ID reused across disjoint spatial cells")
+        for ref in refs:
+            ok, reason=verify_direct_spatial_target(target_file,ref)
+            if not ok:
+                raise SpatialPlanError(
+                    f"Unresolved generated spatial target {ref.parcel_id:#010x}: {reason}")
         all_direct_ids.update(r.parcel_id for r in refs)
         resolved[path]=tuple(refs)
     branches=[]
