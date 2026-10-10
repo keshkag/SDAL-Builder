@@ -120,7 +120,7 @@ class SpanEvidenceTest(unittest.TestCase):
         first = m.analyze(d)
         self.assertEqual(first, m.analyze(dict(reversed(list(d.items())))))
         self.assertEqual(d, baseline)
-        self.assertIn("Structural links checked", m.markdown(first))
+        self.assertIn("Repeating chain and cross-file checks", m.markdown(first))
 
 
 if __name__ == "__main__":
