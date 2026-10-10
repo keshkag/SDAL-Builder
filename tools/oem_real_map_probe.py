@@ -120,10 +120,21 @@ def linked_seven_word_markers(init: bytes, map1: bytes) -> list[dict]:
                 break
             places.append(found)
             search_at = found + 1
+        raw_id = int.from_bytes(pattern[:4], "big")
+        target = (raw_id & 0xffffff) * UNIT
+        target_header = None
+        if target + HEADER.size <= len(map1):
+            possible = header_at(map1, target)
+            if (possible["parcel_id"] == "0x"+pattern[:4].hex().upper()
+                    and possible["self_addressed_at_256_bytes"]
+                    and possible["region"] == 1):
+                target_header = possible
         matches.append({
             "init_group": i+1, "repeated_word": "0x"+pattern[:4].hex().upper(),
             "map1_exact_28_byte_matches": places,
-            "interpretation": "literal signature only; pointer semantics unverified",
+            "low24_times_256_target": target,
+            "map1_exact_target_header": target_header,
+            "interpretation": "literal signature and optional exact header ID match; runtime dereference remains unverified",
         })
     return matches
 
