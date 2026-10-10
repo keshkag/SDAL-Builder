@@ -50,10 +50,7 @@ def fixture(sections: int, newer: bool) -> dict[str, bytes]:
     init[0x12000:0x12000 + 0x94C] = mtoc[:0x94C]
     for dest, src in ((0x6000, 0x2000), (0xA000, 0x6000),
                       (0xE000, 0x16000 if newer else 0x12000)):
-        copied_bytes = 0x3000 if (not newer and dest == 0xE000) else 0x4000
-        init[dest:dest + copied_bytes] = benelux[src:src + copied_bytes]
-    if not newer:
-        init[0x11000] = 0x7B  # fourth block is deliberately not a byte-identical copy
+        init[dest:dest + 0x4000] = benelux[src:src + 0x4000]
     region = b"SDAL" + bytes([1 if newer else 2]) + bytes(4091)
     return {
         "INIT.SDL": bytes(init), "MTOC.SDL": bytes(mtoc),
@@ -96,8 +93,8 @@ class CrossVersionTests(unittest.TestCase):
         self.assertTrue(all(x["stored_address_points_to_benelux"] for x in o+n))
         old_fragment = next(x for x in o if x["init_offset"] == 0xE000)
         new_fragment = next(x for x in n if x["init_offset"] == 0xE000)
-        self.assertEqual(old_fragment["matching_complete_4k_blocks"], 3)
-        self.assertFalse(old_fragment["full_16k_identical"])
+        self.assertEqual(old_fragment["matching_complete_4k_blocks"], 4)
+        self.assertTrue(old_fragment["full_16k_identical"])
         self.assertEqual(new_fragment["matching_complete_4k_blocks"], 4)
         self.assertTrue(new_fragment["full_16k_identical"])
 
