@@ -38,9 +38,14 @@ def inspect_map(path: Path) -> dict:
                 totals["verified_singleton_0x1000"] += 1
             else:
                 totals["unclassified_multibyte_root"] += 1
+                initial_control = int.from_bytes(raw[:2], "big") if len(raw) >= 2 else None
+                ff_tail = len(raw) - len(raw.rstrip(b"\\xff"))
                 complex_roots.append({
                     "index": index_id, "tree": tree_id,
                     "root_bytes_including_possible_padding": len(raw),
+                    "initial_be16_control_candidate": (
+                        f"0x{initial_control:04X}" if initial_control is not None else None),
+                    "possible_trailing_ff_padding_bytes": ff_tail,
                     "sha256": sha256(raw).hexdigest(),
                     "is_fully_validated_first_root": index_id == 0 and tree_id == 0,
                 })
@@ -54,6 +59,8 @@ def inspect_map(path: Path) -> dict:
         "coverage": dict(totals),
         "verified_first_root_graph": root_zero,
         "unclassified_multibyte_roots": complex_roots,
+        "unclassified_initial_control_distribution": dict(sorted(Counter(
+            item["initial_be16_control_candidate"] for item in complex_roots).items())),
         "limitations": [
             "A 0x1000 two-byte root is a structurally empty leaf; its spatial role is not proven.",
             "All multi-byte roots except first index/root are explicitly not validated here.",
