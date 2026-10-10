@@ -107,7 +107,7 @@ def _verify_hybrid(path: Path, expected: dict[str, int], volume_id: str) -> None
         iso = _entries(fd, root, root_size, joliet=False)
         joliet = _entries(fd, jroot, jroot_size, joliet=True)
         if iso != joliet:
-            raise MasteringError("ISO/Joliet files and extents differ")
+            raise MasteringError("ISO/Joliet files and extents differ: " + repr(iso)[:750] + " vs " + repr(joliet)[:750])
         normalized = {k.removesuffix(";1"): v for k, v in iso.items()}
         if set(normalized) != set(expected):
             raise MasteringError("ISO contains missing/unexpected SDL files")
