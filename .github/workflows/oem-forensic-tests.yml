@@ -36,3 +36,17 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq genisoimage
       - name: Run offline forensic regression tests
         run: python3 -m unittest discover -s tests -p 'test_oem_*.py' -v
+
+  macos-hybrid-mastering:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install cdrtools
+        run: brew install cdrtools
+      - name: Exercise mkisofs hybrid mastering and byte-parity tests
+        run: python3 -m unittest discover -s tests -p 'test_oem_hybrid_mastering.py' -v
