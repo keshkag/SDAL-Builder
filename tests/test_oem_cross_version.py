@@ -19,7 +19,7 @@ def pack(offset: int, index: int, typ: int, region: int, descriptor: int) -> byt
 
 
 def fixture(sections: int, newer: bool) -> dict[str, bytes]:
-    assert sections in (16, 19)
+    assert sections in (16, 18, 19)
     size = 0x2000 + sections * 0x4000
     benelux = bytearray(size)
     france = bytearray(size)
@@ -28,7 +28,7 @@ def fixture(sections: int, newer: bool) -> dict[str, bytes]:
         france[off:off + 20] = pack(off, 56, 19, 0, 0)
     benelux[0x100] = 5
     france[0x100] = 9
-    carto = bytearray(184320 if newer else 159744)
+    carto = bytearray({16: 159744, 18: 225280, 19: 184320}[sections])
     candidate_list = (
         [(0x2000, 56), (0x6000, 56), (0xA000, 46),
          (0x12000, 0), (0x17E00, 45), (0x21B00, 52),
@@ -43,7 +43,7 @@ def fixture(sections: int, newer: bool) -> dict[str, bytes]:
     mtoc = bytearray(4096)
     mtoc[0x48:0x54] = b"BENELUX1.SDL"
     mtoc[0x58:0x5C] = bytes.fromhex("52000001")
-    init = bytearray(172032 if newer else 165888)
+    init = bytearray({16: 165888, 18: 169984, 19: 172032}[sections])
     init[0:4] = len(init).to_bytes(4, "big")
     init[8:12] = (0x12000).to_bytes(4, "big")
     init[12:16] = (0x94C).to_bytes(4, "big")
