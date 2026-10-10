@@ -1,5 +1,6 @@
 # Iter016 — OEM KD-root similarity clusters and reference relationships
 
+> **Superseded by Iter017 (SDAL 1.7 §3.1.1.2).** The `1,101 unresolved bounded roots` and their F/G/H/Y classifications below were false negatives caused by the older decoder ignoring equal-width left/right child slots, including the zero-padded field of a pruned child. The spec-correct decoder parses **all 4,987 explicitly bounded roots** in the two genuine maps, and all 21 terminal roots also pass after independently recorded FF-tail inference. See `docs/iter017-sdal17-global-kd-complete.md`. Historical counts are retained below as a record of the superseded experiment, **not current OEM truth**.\n\n
 ## Decision and evidence boundary
 
 The user asked to **find similar undecoded root records, separate them into meaningful groups, identify how groups differ, and trace their connections to verified trees**. This is the scope of Iter016. The existing end-to-end \`build.sh\` OSM→SDL→hybrid ISO workflow and map serializers remain unchanged.

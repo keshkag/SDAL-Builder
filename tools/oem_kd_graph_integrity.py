@@ -85,24 +85,42 @@ def parse_node(blob: bytes, position: int, limit: int) -> dict:
         if position + 6 > limit:
             raise GraphError("Truncated node/segment entity IDs")
         position += 6
+    # SDAL 1.7 §3.1.1.2: the left/right child OFFSET FIELDS occupy
+    # EQUAL-WIDTH slots. The width is their maximum encoded width.
+    # A pruned/absent child still has a physically present zero-filled
+    # slot when the other side has an offset. A narrower child's
+    # value lives in the least-significant bytes of its shared-width slot.
+    modes = (("left", (control >> 6) & 3),
+             ("right", (control >> 4) & 3))
+    widths = (0, 4, 1, 2)
+    slot_width = max(widths[mode] for _, mode in modes)
     edges = []
-    for side, code in (("left", (control >> 6) & 3),
-                       ("right", (control >> 4) & 3)):
-        width = (0, 4, 1, 2)[code]
-        if position + width > limit:
-            raise GraphError("Truncated KD child offset")
-        if width:
-            value = int.from_bytes(blob[position:position+width], "big")
-            if width == 4:
-                edges.append({"side": side, "mode": "external",
-                              "index_delta": value >> 16,
-                              "tree_id": value & 0xFFFF})
-            else:
-                edges.append({"side": side, "mode": "local",
-                              "width_bytes": width,
-                              "offset_two_byte_units": value,
-                              "target": start + value * 2})
-        position += width
+    pruned_slots = 0
+    for side, mode in modes:
+        if not slot_width:
+            continue
+        if position + slot_width > limit:
+            raise GraphError("Truncated equal-width KD child offset slot")
+        slot = blob[position:position + slot_width]
+        position += slot_width
+        if mode == 0:
+            if any(slot):
+                raise GraphError("Nonzero bytes in pruned KD child slot")
+            pruned_slots += 1
+            continue
+        width = widths[mode]
+        if width < slot_width and any(slot[:-width]):
+            raise GraphError("Nonzero high-order bytes in padded KD child slot")
+        value = int.from_bytes(slot[-width:], "big")
+        if mode == 1:
+            edges.append({"side": side, "mode": "external",
+                          "index_delta": value >> 16,
+                          "tree_id": value & 0xFFFF})
+        else:
+            edges.append({"side": side, "mode": "local",
+                          "width_bytes": width,
+                          "offset_two_byte_units": value,
+                          "target": start + value * 2})
     descriptors = []
     for side, enabled in (("left", control & 0x8000), ("right", control & 0x4000)):
         if enabled:
@@ -133,6 +151,7 @@ def parse_node(blob: bytes, position: int, limit: int) -> dict:
         "cut_32nds": (control >> 8) & 31,
         "entity_id_mode": entity_mode,
         "edges": edges, "descriptors": descriptors,
+        "child_slot_bytes": slot_width, "pruned_slot_count": pruned_slots,
     }
 
 

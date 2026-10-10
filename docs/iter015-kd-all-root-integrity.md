@@ -1,5 +1,6 @@
 # Iter015 — full-corpus KD-root integrity, without invented node semantics
 
+> **Superseded by Iter017 (SDAL 1.7 §3.1.1.2).** The `1,101 unresolved bounded roots` and their F/G/H/Y classifications below were false negatives caused by the older decoder ignoring equal-width left/right child slots, including the zero-padded field of a pruned child. The spec-correct decoder parses **all 4,987 explicitly bounded roots** in the two genuine maps, and all 21 terminal roots also pass after independently recorded FF-tail inference. See `docs/iter017-sdal17-global-kd-complete.md`. Historical counts are retained below as a record of the superseded experiment, **not current OEM truth**.\n\n
 ## Source authority and scope
 
 All observations are derived from user-supplied original **WE_06Q4** map payloads:
