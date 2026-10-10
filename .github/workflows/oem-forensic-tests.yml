@@ -11,6 +11,7 @@ on:
       - forensic/iter009-init-table-contents
       - forensic/iter010-real-map-and-iso
       - forensic/iter011-oem-iso-layout
+      - forensic/iter012-oem-kd-index
   pull_request:
     paths:
       - 'tools/oem_*.py'
