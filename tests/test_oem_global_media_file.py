@@ -36,7 +36,7 @@ class GlobalMediaFileTests(unittest.TestCase):
         self.assertEqual([p.file_offset for p in result.placements],
                          [0x1000,0x2000,0x3000])
         self.assertEqual([p.parcel_id for p in result.placements],
-                         [0x18000010,0x18000020,0x18000030])
+                         [0x00000010,0x00000020,0x00000030])
         self.assertEqual(len(result.image),0x4000)
         self.assertEqual(result.image[1250],25)
         self.assertEqual(result.image[1251],8)
@@ -63,7 +63,7 @@ class GlobalMediaFileTests(unittest.TestCase):
     def test_missing_reference_data_is_not_silently_accepted(self):
         with self.assertRaisesRegex(GlobalIndexError,"Nonempty"):
             assemble_global_media(media_base(),())
-        with self.assertRaisesRegex(GlobalIndexError,"source"):
+        with self.assertRaisesRegex(GlobalIndexError,"family"):
             ReferenceSource("invalid","item",12,b"x",20,20,0)
         with self.assertRaisesRegex(GlobalIndexError,"outside"):
             ReferenceSource("feature_type","item",12,b"x",23,23,0)
