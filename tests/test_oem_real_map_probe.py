@@ -26,10 +26,11 @@ def source():
         b[at:at+20] = header(at, 19, 0, 56)
     a[0x3000] = 7
     b[0x3000] = 8
-    map1 = bytearray(0xA000)
+    map1 = bytearray(0x10000)
     map1[0x2000:0x2014] = header(0x2000, 24, 1, 9, redundant=True)
     map1[0x6000:0x6014] = header(0x6000, 3, 1, 11)
     map1[0x800:0x81c] = bytes.fromhex("480000c2")*7
+    map1[0xC200:0xC214] = header(0xC200, 255, 1, 8, redundant=True)
     init = bytearray(0x11000)
     for i in range(8):
         off=0x1c8 + 16*i
@@ -50,8 +51,8 @@ class RealMapTests(unittest.TestCase):
 
     def test_map_candidates_are_not_proven_parcels(self):
         h=m.cartographic_candidate_scan(source()[3])
-        self.assertEqual(h["candidate_count_not_proven_parcels"],2)
-        self.assertEqual({x["type"] for x in h["types"]},{3,24})
+        self.assertEqual(h["candidate_count_not_proven_parcels"],3)
+        self.assertEqual({x["type"] for x in h["types"]},{3,24,255})
 
     def test_region0_has_real_sections(self):
         init,a,b,map1=source()
@@ -67,6 +68,10 @@ class RealMapTests(unittest.TestCase):
         self.assertEqual(len(r["INIT_word_pool_to_BENELUX1_literal_signature"]),8)
         self.assertEqual(r["INIT_word_pool_to_BENELUX1_literal_signature"][0]
                          ["map1_exact_28_byte_matches"],[0x800])
+        link = r["INIT_word_pool_to_BENELUX1_literal_signature"][0]
+        self.assertEqual(link["low24_times_256_target"],0xC200)
+        self.assertEqual(link["map1_exact_target_header"]["parcel_type"],255)
+        self.assertEqual(link["map1_exact_target_header"]["offset"],0xC200)
 
     def test_broken_region_and_truncated_header_rejected(self):
         init,a,b,map1=source()
