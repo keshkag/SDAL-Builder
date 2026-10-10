@@ -30,7 +30,11 @@ def donor() -> dict[str, bytes]:
     for pos, kind, idx, desc in ((0x2000, 255, 56, 0),
                                  (0x6000, 1, 56, 0xB8),
                                  (0xA000, 1, 46, 0xB8),
-                                 (0x12000, 1, 0, 0xB8)):
+                                 (0x12000, 1, 0, 0xB8),
+                                 (0x17E00, 1, 45, 0xB8),
+                                 (0x21B00, 1, 52, 0xB8),
+                                 (0x25700, 1, 42, 0xB8),
+                                 (0x28900, 1, 59, 0xB8)):
         c[pos:pos + 20] = header(pos, kind, 1, idx, desc)
     i = bytearray(172032)
     for dst, src in ((0x6000, 0x2000), (0xA000, 0x6000),
@@ -52,7 +56,7 @@ class EvidenceTests(unittest.TestCase):
         evidence = mod.analyze(donor())
         self.assertTrue(all(evidence["validation"].values()))
         self.assertEqual([len(v["candidates"]) for v in evidence["files"].values()],
-                         [0, 19, 19, 4])
+                         [0, 19, 19, 8])
         self.assertEqual(evidence["files"]["CARTOTOP.SDL"]["candidates"][2]
                          ["size_index"], 46)
         self.assertEqual(evidence["files"]["CARTOTOP.SDL"]["candidates"][3]
