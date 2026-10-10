@@ -108,11 +108,14 @@ To execute against original OEM payloads:
 python3 tools/oem_kd_similarity_clusters.py \
   --map BENELUX1=/path/to/BENELUX1.SDL \
   --map SWIAUS1=/path/to/SWIAUS1.SDL \
+  --require-unique-singleton-parent \
   --json verification/iter016-kd-clusters.json \
   --md verification/iter016-kd-clusters.md
 
 python3 -m unittest discover -s tests -p 'test_oem_*.py' -v
 \`\`\`
+
+The optional `--require-unique-singleton-parent` mode enforces this particular observed WE_06Q4 cohort's unique-incoming-leaf invariant and fails closed on missing/duplicate links. It is **not** treated as a universal SDAL requirement. A synthetic counterexample is deliberately rejected by the new regression test.
 
 **Verification provenance:** All original-byte counts and relations above were independently computed directly against both user-provided map files in this session. The published tool is covered by synthetic GitHub CI regressions. A separate execution of the *published exact-version* CLI against all original bytes remains a release acceptance item if runtime access is unavailable; green synthetic CI must not be misrepresented as complete original-data verification.
 
