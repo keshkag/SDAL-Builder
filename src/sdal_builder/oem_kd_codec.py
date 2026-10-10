@@ -208,3 +208,71 @@ def verify_direct_spatial_target(fileobj, ref: SpatialRef,
     if region != 1:
         return False, "target_region_mismatch"
     return True, "exact_header_match"
+
+
+def encode_index_from_nodes(*, file_offset: int,
+                            roots: tuple[tuple[KDNode, ...], ...]) -> bytes:
+    """Build a complete SDAL type-255 index parcel from planned KD records.
+
+    The caller supplies nodes in physical byte order, with local child
+    offsets already expressed in 2-byte units. This verifies that every
+    local child targets an actual node start and that every root's local
+    graph is complete, singly parented and reachable. It does not invent
+    spatial cuts or OSM parcel content; cross-index references are
+    validated when the full cross-index graph is available.
+    """
+    from .oem_index import encode_new_index_parcel, decode_index_parcel
+    from collections import Counter, deque
+
+    if not roots:
+        raise CodecError("Index must have at least one tree root")
+    serialized_roots = []
+    for root_number, nodes in enumerate(roots):
+        if not nodes:
+            raise CodecError(f"Empty KD root {root_number}")
+        chunks = [encode_kd_node(node) for node in nodes]
+        starts = []
+        pos = 0
+        for chunk in chunks:
+            starts.append(pos)
+            pos += len(chunk)
+        position_to_index = {start: i for i, start in enumerate(starts)}
+        if len(position_to_index) != len(starts):
+            raise CodecError("Duplicate KD node address")
+        incoming = Counter()
+        edges = {}
+        for index, node in enumerate(nodes):
+            child_indexes = []
+            for child in (node.left_child, node.right_child):
+                if child is not None and child.mode in (2, 3):
+                    target = starts[index] + 2 * child.value
+                    if target not in position_to_index or target <= starts[index]:
+                        raise CodecError("Local KD link is not an aligned node start")
+                    next_index = position_to_index[target]
+                    incoming[next_index] += 1
+                    child_indexes.append(next_index)
+            edges[index] = child_indexes
+        if incoming[0] or any(incoming[i] != 1 for i in range(1, len(nodes))):
+            raise CodecError("KD root has missing or multiple local node parents")
+        if sum(incoming.values()) != len(nodes)-1:
+            raise CodecError("Local KD links do not form a rooted tree")
+        visited = {0}
+        queue = deque([0])
+        while queue:
+            for child in edges[queue.popleft()]:
+                if child not in visited:
+                    visited.add(child)
+                    queue.append(child)
+        if len(visited) != len(nodes):
+            raise CodecError("KD root contains unreachable node records")
+        serialized_roots.append(b"".join(chunks))
+    try:
+        raw = encode_new_index_parcel(file_offset=file_offset,
+                                      size_index=8,
+                                      root_blobs=tuple(serialized_roots))
+        parsed = decode_index_parcel(raw, absolute_offset=file_offset)
+    except ValueError as exc:
+        raise CodecError(f"SDAL KD index packing failed: {exc}") from exc
+    if parsed.reassemble() != raw:
+        raise CodecError("Generated index is not byte-for-byte reproducible")
+    return raw
