@@ -14,6 +14,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from test_oem_typed_headers import sample
 from sdal_builder.oem_typed_headers import decode_typed_fixed_header
+from sdal_builder.oem_spatial_header import PCL
 from sdal_builder.oem_typed_records import RoutingNodeBasic
 from sdal_builder.oem_route_segments import RoutingSegmentRegular
 from sdal_builder.oem_line_geometry import FullPolyline, CartographicPosition
@@ -28,6 +29,12 @@ PID0=0x18000040
 
 def authority(byte_size=4096):
     return SizeAuthority(256,{24:byte_size})
+
+def route_template():
+    template=sample(0,0)
+    fields=list(PCL.unpack(template.spatial_prefix[:20]))
+    fields[0]=PID0
+    return replace(template,spatial_prefix=PCL.pack(*fields)+template.spatial_prefix[20:])
 
 def cartographic():
     return (CartographicRoad(
@@ -73,7 +80,7 @@ class PhysicalParcelAssemblyTests(unittest.TestCase):
 
     def test_route_real_node_segment_blocks_min_ids_and_reciprocal_graph(self):
         nodes,segments=routing()
-        result=assemble_routing_regular(sample(0,0),nodes,segments,
+        result=assemble_routing_regular(route_template(),nodes,segments,
                       minimum_node_id=1234,minimum_segment_id=8000,
                       authority=authority(),file_offset=0x4000,block_shift=1)
         header=decode_typed_fixed_header(result.blob)
@@ -139,12 +146,12 @@ class PhysicalParcelAssemblyTests(unittest.TestCase):
     def test_missing_routing_backreferences_and_minima_fail_closed(self):
         nodes,segments=routing()
         with self.assertRaisesRegex(ValueError,"backreferences"):
-            assemble_routing_regular(sample(0,0),
+            assemble_routing_regular(route_template(),
                 (nodes[0],RoutingNodeBasic(5243010,300120,(1,),b""),
                  nodes[2]),segments,minimum_node_id=1,
                 minimum_segment_id=2,authority=authority(),file_offset=0x4000)
         with self.assertRaisesRegex(ParcelAssemblyError,"minimum ID"):
-            assemble_routing_regular(sample(0,0),nodes,segments,
+            assemble_routing_regular(route_template(),nodes,segments,
                 minimum_node_id=0,minimum_segment_id=2,
                 authority=authority(),file_offset=0x4000)
 
