@@ -9,7 +9,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/"src"))
 sys.path.insert(0, str(ROOT/"tools"))
-from sdal_builder.oem_kd_codec import KDNode, KDChild, SpatialRef, encode_kd_node
+from sdal_builder.oem_kd_codec import KDNode, KDChild, SpatialRef, encode_index_from_nodes
 from oem_kd_graph_integrity import HEADER, INDEX_BYTES, INDEX_START, GraphError
 from oem_spatial_encoder_parity import audit
 
@@ -17,17 +17,15 @@ from oem_spatial_encoder_parity import audit
 def generated_map(root: Path) -> Path:
     destination = root/"GENERATED1.SDL"
     ref = SpatialRef(3, 0, 0x18000020)
-    parent = encode_kd_node(KDNode(False,16,0,None,KDChild(1,1),KDChild(1,2),
-                                   left_parcels=(ref,)))
-    assert len(parent) == 16
-    data=bytearray(INDEX_START+INDEX_BYTES)
+    parent = KDNode(False,16,0,None,KDChild(1,1),KDChild(1,2),
+                    left_parcels=(ref,))
+    leaf = KDNode(False,16,0,None,None,None)
+    index = encode_index_from_nodes(file_offset=INDEX_START,
+                                    roots=((parent,), (leaf,), (leaf,)))
+    assert len(index) == INDEX_BYTES
+    data = bytearray(INDEX_START+INDEX_BYTES)
     struct.pack_into(">IHBBBBHHHHH",data,0x2000,ref.parcel_id,0,3,1,0,0,0,0,0,0,0)
-    off=INDEX_START
-    HEADER.pack_into(data,off,0x480000C2,0,255,1,0,0,0,0,0,0,0)
-    struct.pack_into(">HH3H",data,off+20,3,0,30,46,48)
-    data[off+30:off+46]=parent
-    data[off+46:off+50]=bytes.fromhex("10001000")
-    data[off+50:]=b"\xff"*(INDEX_BYTES-50)
+    data[INDEX_START:] = index
     destination.write_bytes(data)
     return destination
 
