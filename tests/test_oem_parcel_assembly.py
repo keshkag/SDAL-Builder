@@ -206,8 +206,11 @@ class PhysicalParcelAssemblyTests(unittest.TestCase):
 
     def test_bbox_violation_in_polyline_start_or_routing_node_is_rejected(self):
         entries=cartographic()
-        outside=replace(entries[0],polyline=replace(
-            entries[0].polyline,start_lon=600000))
+        outside=replace(entries[0],
+            polyline=replace(entries[0].polyline,start_lon=600000),
+            positions=tuple(replace(p,
+                longitude_ntu=600000+p.longitude_ntu-entries[0].polyline.start_lon)
+                for p in entries[0].positions))
         with self.assertRaisesRegex(ParcelAssemblyError,"Polyline start escapes"):
             assemble_cartographic_roads(sample(1,0),(outside,),
                 authority=authority(),file_offset=0x2000)
