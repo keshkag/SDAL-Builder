@@ -67,6 +67,17 @@ class KDClusterTests(unittest.TestCase):
                              ["A_exact_1000_leaf"], 1)
             self.assertEqual(row["unresolved_frontier_from_verified_graphs"], [])
 
+    def test_optional_oem_cohort_contract_is_fail_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = fixture(Path(directory))
+            # Valid generic KD graph: leaves need not have inbound edges
+            # in this tiny synthetic fixture. The *observed original* WE_06Q4
+            # cohort-specific 1-parent contract therefore must not be assumed.
+            self.assertEqual(m.compare({"SAMPLE": path})["combined"]["root_total"], 5)
+            with self.assertRaisesRegex(GraphError, "singleton-link invariant"):
+                m.compare({"SAMPLE": path},
+                          require_unique_singleton_parent=True)
+
     def test_corrupt_index_parcel_fails_closed(self):
         with tempfile.TemporaryDirectory() as directory:
             path = fixture(Path(directory))
