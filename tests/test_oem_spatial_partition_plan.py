@@ -93,7 +93,7 @@ class SpatialPlanTests(unittest.TestCase):
         tree=plan_spatial_partition(self.region,feats,max_features_per_leaf=1)
         ref={"L":(SpatialRef(0,0,0x18000020),),
              "R":(SpatialRef(1,0,0x18000040),)}
-        with self.assertRaisesRegex(SpatialPlanError,"entity ID minima"):
+        with self.assertRaisesRegex(SpatialPlanError,"segment/node ID minima"):
             compile_planned_index(tree,parcel_refs=ref,entity_id_bounds={})
 
     def test_reject_wrong_type_and_reused_physical_pid(self):
