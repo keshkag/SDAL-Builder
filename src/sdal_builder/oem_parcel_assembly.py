@@ -260,7 +260,7 @@ def _read_block_array(raw: bytes, desc: tuple, *,
             raise ParcelAssemblyError("Unexpected bytes between successive record blocks")
     if len(records) != count:
         raise ParcelAssemblyError("Record table lost entries")
-    return tuple(records), offsets
+    return tuple(records), offsets, tuple(occupied)
 
 
 def _measure_block(raw: bytes, at: int, count: int, end: int) -> tuple[int, int]:
