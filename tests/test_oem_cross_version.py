@@ -49,7 +49,7 @@ def fixture(sections: int, newer: bool) -> dict[str, bytes]:
     init[12:16] = (0x94C).to_bytes(4, "big")
     init[0x12000:0x12000 + 0x94C] = mtoc[:0x94C]
     for dest, src in ((0x6000, 0x2000), (0xA000, 0x6000),
-                      (0xE000, 0x16000 if newer else 0x12000)):
+                      (0xE000, 0x16000 if sections == 19 else 0x12000)):
         init[dest:dest + 0x4000] = benelux[src:src + 0x4000]
     region = b"SDAL" + bytes([1 if newer else 2]) + bytes(4091)
     return {
