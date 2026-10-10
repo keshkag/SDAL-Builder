@@ -1,0 +1,25 @@
+name: OEM forensic reader regression
+on:
+  push:
+    branches:
+      - forensic/iter003-parcel-boundaries
+  pull_request:
+    paths:
+      - 'tools/oem_*.py'
+      - 'tests/test_oem_*.py'
+      - '.github/workflows/oem-forensic-tests.yml'
+
+jobs:
+  evidence-reader:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check Python syntax
+        run: python3 -m compileall -q tools/oem_inventory.py tools/oem_catalog_decoder.py tools/oem_block_provenance.py tools/oem_parcel_boundaries.py
+      - name: Run offline forensic regression tests
+        run: python3 -m unittest discover -s tests -p 'test_oem_*.py' -v
