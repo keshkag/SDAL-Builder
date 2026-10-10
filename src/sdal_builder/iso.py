@@ -174,15 +174,17 @@ def build_iso(sdl_files: list[Path], out_iso: Path) -> None:
            "-V", requested_label, "-graft-points", "-o", str(output)]
     cmd.extend(name + "=" + escape_graft(str(sources[name]))
                for name in sorted(sources))
+    logpath = output.with_suffix(".master.log")
     try:
-        with output.open("wb") as logfile:
-            # genisoimage opens its output path directly; never pipe a 6GB ISO
-            # through Python memory or stdout.
+        with logpath.open("wb") as logfile:
+            # The process writes the ISO itself. Keep diagnostics in a
+            # DIFFERENT file to avoid corrupting the image's output inode.
             run = subprocess.run(cmd, stdout=subprocess.DEVNULL,
                                  stderr=logfile, check=False)
         if run.returncode:
+            detail = logpath.read_text(errors="replace")[-1500:]
             raise MasteringError("Hybrid ISO generator exited with "
-                                 f"code {run.returncode}")
+                                 f"code {run.returncode}: {detail}")
         after = {name: (p.stat().st_size,p.stat().st_mtime_ns)
                  for name,p in sources.items()}
         if after != before:
@@ -192,3 +194,4 @@ def build_iso(sdl_files: list[Path], out_iso: Path) -> None:
         os.replace(output, out_iso)
     finally:
         output.unlink(missing_ok=True)
+        logpath.unlink(missing_ok=True)
