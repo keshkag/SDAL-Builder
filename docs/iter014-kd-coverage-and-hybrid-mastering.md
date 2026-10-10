@@ -22,7 +22,7 @@ New read-only `tools/oem_kd_root_coverage.py` records all roots, the exact `0x10
 
 ## Hybrid ISO mastering — actual production implementation
 
-The existing `src/sdal_builder/iso.py` module has been replaced with a filesystem mastering implementation that preserves its public `build_iso(sdl_files,out_iso)` entrypoint. The rest of the one-command `build.sh` OSM→SDL→ISO pipeline remains unchanged.
+The existing `src/sdal_builder/iso.py` module has been replaced with a filesystem mastering implementation that preserves its public `build_iso(sdl_files,out_iso)` entrypoint. The one-command `build.sh` OSM→SDL→ISO orchestration is preserved. It now checks for the required UDF mastering executable **before** starting expensive OSM download and ETL, and fails with explicit install instructions instead of failing at the very end.
 
 Actual observed OEM DVD mastering fingerprint:
 
@@ -45,7 +45,7 @@ The new writer uses `genisoimage -udf -J -iso-level 3` on Linux, or equivalent `
 7. Source file lengths and timestamps have not changed while mastering.
 8. The resulting ISO is atomically published only after all checks pass. Otherwise temporary ISO is deleted and the build fails with a clear diagnostic. **No pure-ISO9660 fallback**.
 
-These are real-mastering properties, not mere unit-test mocks. GitHub Actions installs `genisoimage`, builds actual synthetic SDL files into an ISO, verifies the filesystem and source payload hashes, and mutates one byte in the mastered image to confirm that SHA-256 comparison fails. A separate macOS job tests the `cdrtools`/`mkisofs` implementation, when its run succeeds.
+These are real-mastering properties, not mere unit-test mocks. GitHub Actions installs `genisoimage`, builds actual synthetic SDL files into an ISO, verifies the filesystem and source payload hashes, and mutates one byte in the mastered image to confirm that SHA-256 comparison fails. A separate macOS GitHub Actions job **passed**, exercising `cdrtools`/`mkisofs` hybrid generation, filesystem checks, byte parity, and deliberate output corruption rejection.
 
 ### Deployment dependencies
 
@@ -61,7 +61,7 @@ These are real-mastering properties, not mere unit-test mocks. GitHub Actions in
 **Verified in this iteration:**
 - Original binary root counting: 5,008 roots across 21 type-255 OEM index parcels; 3,152 exact `0x1000` two-byte leaf structures.
 - Real Linux `genisoimage` ISO9660/Joliet/UDF mastering on small synthetic SDL sets, including byte-parity validation and corruption rejection.
-- Cumulative Python CI tests; macOS integration is evaluated separately on actual GitHub macOS runner.
+- Cumulative Python CI tests, including real Linux genisoimage and macOS cdrtools/mkisofs integration on GitHub-hosted runners, passed.
 
 **Still outstanding:**
 - Complete node graphs of the 1,854 complex roots other than the two first-root graphs proven in Iter013.
