@@ -57,22 +57,29 @@ def find_headers(data: bytes) -> list[dict]:
 
 
 def copied_regions(init: bytes, benelux: bytes) -> list[dict]:
-    """Compare whole aligned 16-KiB candidate sections only, not shifted windows."""
+    """Measure exact copied prefixes from aligned OEM regional candidate starts."""
     results = []
+    first_block = SECTION // 4
     lookup = {}
     for offset in range(0x2000, len(benelux) - SECTION + 1, SECTION):
-        chunk = benelux[offset:offset + SECTION]
-        if len(set(chunk)) > 1:
-            lookup.setdefault(sha256(chunk).digest(), []).append(offset)
+        block = benelux[offset:offset + first_block]
+        if len(set(block)) > 1:
+            lookup.setdefault(sha256(block).digest(), []).append(offset)
     for dest in range(0x2000, len(init) - SECTION + 1, SECTION):
-        chunk = init[dest:dest + SECTION]
-        for source in lookup.get(sha256(chunk).digest(), []):
-            if chunk != benelux[source:source + SECTION]:
+        first = init[dest:dest + first_block]
+        for source in lookup.get(sha256(first).digest(), []):
+            if first != benelux[source:source + first_block]:
                 continue
-            rawpid = int.from_bytes(chunk[:4], "big")
+            left = init[dest:dest + SECTION]
+            right = benelux[source:source + SECTION]
+            prefix = next((i for i, (a, b) in enumerate(zip(left, right))
+                           if a != b), min(len(left), len(right)))
+            rawpid = int.from_bytes(first[:4], "big")
             results.append({
                 "init_offset": dest, "benelux_offset": source,
-                "bytes": SECTION,
+                "exact_prefix_bytes": prefix,
+                "matching_complete_4k_blocks": prefix // first_block,
+                "full_16k_identical": prefix == SECTION,
                 "stored_address_points_to_benelux": (rawpid & 0xFFFFFF) * UNIT == source})
     return sorted(results, key=lambda item: (item["init_offset"], item["benelux_offset"]))
 
@@ -187,7 +194,9 @@ def markdown(report: dict) -> str:
         for item2 in item["init_benelux_exact_16k_copies"]:
             lines.append(f"- INIT 0x{item2['init_offset']:X} ↔ BENELUX0 "
                          f"0x{item2['benelux_offset']:X} "
-                         f"(embedded source address matches: {item2['stored_address_points_to_benelux']})")
+                         f"(identical prefix: {item2['exact_prefix_bytes']} bytes; "
+                         f"full 16 KiB: {item2['full_16k_identical']}; "
+                         f"embedded source address matches: {item2['stored_address_points_to_benelux']})")
     for comp in report["comparisons"]:
         lines += ["", "## Pair " + comp["left"] + " / " + comp["right"], "",
                   "- MTOC exactly identical: " + str(comp["mtoc_byte_identical"])]
