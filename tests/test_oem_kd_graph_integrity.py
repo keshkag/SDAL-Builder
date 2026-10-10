@@ -59,7 +59,7 @@ class KDGraphIntegrityTests(unittest.TestCase):
             self.assertEqual(r["non_tree_local_edges"], 0)
             self.assertEqual(r["cross_index_reference_counts"], {"1": 1})
             self.assertEqual(r["max_local_depth"], 1)
-            self.assertIn("first-root", mod.markdown({"BENELUX1": row}))
+            self.assertIn("FIRST root", mod.markdown({"BENELUX1": row}))
 
     def test_bad_local_child_rejected(self):
         with tempfile.TemporaryDirectory() as td:
