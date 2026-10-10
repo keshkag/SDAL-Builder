@@ -68,7 +68,7 @@ class KDSpatialEncoderTests(unittest.TestCase):
     def test_implicit_entity_modes_are_not_written(self):
         for e in (0,2,3):
             self.assertEqual(len(self.roundtrip(node(emode=e))),2)
-        with self.assertRaisesRegex(CodecError,"Implicit"):
+        with self.assertRaisesRegex(CodecError,"implicit entity mode"):
             encode_kd_node(node(emode=2,ids=(1,2)))
         with self.assertRaisesRegex(CodecError,"Explicit"):
             encode_kd_node(node(emode=1))
