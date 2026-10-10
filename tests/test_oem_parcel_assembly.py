@@ -112,7 +112,7 @@ class PhysicalParcelAssemblyTests(unittest.TestCase):
                                   file_offset=0x2000)
 
     def test_wrong_parcel_size_index_or_physical_offset_not_accepted(self):
-        with self.assertRaisesRegex(ParcelAssemblyError,"size"):
+        with self.assertRaisesRegex(ParcelAssemblyError,"ucaParcelSizes"):
             assemble_cartographic_roads(sample(1,0),cartographic(),
                  authority=SizeAuthority(256,{23:4096}),file_offset=0x2000)
         with self.assertRaisesRegex(ParcelAssemblyError,"physical offset"):
