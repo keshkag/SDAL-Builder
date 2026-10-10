@@ -56,9 +56,9 @@ class KDClusterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = fixture(Path(directory))
             buf = bytearray(path.read_bytes())
-            # In the verified root's 4-byte external link at 0xC200+36,
+            # In the verified root's 4-byte external link at 0xC200+40,
             # change parcel offset to 0 and root ID to 1 (a known leaf).
-            buf[0xC200+36:0xC200+40] = b"\x00\x00\x00\x01"
+            buf[0xC200+40:0xC200+44] = b"\x00\x00\x00\x01"
             path.write_bytes(buf)
             row = m.inspect_map(path)
             self.assertEqual(row["singleton_roots_targeted_exactly_once"], 1)
