@@ -125,6 +125,7 @@ def encode_new_index_parcel(*, file_offset: int, root_blobs: tuple[bytes, ...],
     """Encode a type-255 index with caller-supplied, independently valid KD nodes.
 
     This function does NOT generate KD trees, map geometry or global headers.
+    Original WE_06Q4 type-255 index parcels use 0xFF tail fill.
     """
     if capacity_bytes != OEM_INDEX_BYTES:
         raise EvidenceError("Unverified index size profile")
@@ -143,4 +144,4 @@ def encode_new_index_parcel(*, file_offset: int, root_blobs: tuple[bytes, ...],
         raise EvidenceError("Roots exceed available parcel capacity")
     return (header + struct.pack(">HH", len(root_blobs), 0)
             + struct.pack(">" + str(len(root_blobs)) + "H", *positions)
-            + b"".join(root_blobs) + bytes(capacity_bytes - cursor))
+            + b"".join(root_blobs) + b"\xff" * (capacity_bytes - cursor))
