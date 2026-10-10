@@ -343,6 +343,9 @@ def verify_bounded_parcel(raw: bytes, *, authority: SizeAuthority,
         for record in decoded["lineDesc"]:
             line = decode_full_polyline(record, min_lat=rect.min_lat,
                                         min_lon=rect.min_long, scale=scale)
+            if not (rect.min_lat <= line.start_lat <= rect.max_lat
+                    and rect.min_long <= line.start_lon <= rect.max_long):
+                raise ParcelAssemblyError("Polyline start escapes spatial bounding rectangle")
             if (line.text_offsets or line.position_count == 0
                     or (line.attribute_index is not None and
                         line.attribute_index > 255)):
@@ -377,6 +380,9 @@ def verify_bounded_parcel(raw: bytes, *, authority: SizeAuthority,
                     min_long_ntu=rect.min_long,scale=scale)
             if end != len(record):
                 raise ParcelAssemblyError("Unparsed routing node bytes")
+            if not (rect.min_lat <= node.latitude_ntu <= rect.max_lat
+                    and rect.min_long <= node.longitude_ntu <= rect.max_long):
+                raise ParcelAssemblyError("Routing node escapes spatial bounding rectangle")
             nodes.append(node)
         segments = tuple(decode_route_segment_regular(
                  record,node_count=len(nodes))
