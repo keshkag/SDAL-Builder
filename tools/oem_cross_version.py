@@ -139,6 +139,13 @@ def compare(left: dict[str, bytes], right: dict[str, bytes]) -> dict:
             "byte_differences_within_overlap": (
                 sum(x != y for x, y in zip(a, b))),
         }
+        if name in ("REGION.SDL", "REGIONS.SDL"):
+            differences = [i for i, (x, y) in enumerate(zip(a, b)) if x != y]
+            if len(differences) <= 64:
+                data[name]["all_changed_byte_offsets"] = differences
+                data[name]["changed_byte_values"] = [
+                    {"offset": i, "left": a[i], "right": b[i]}
+                    for i in differences]
     return {"per_file": data, "mtoc_byte_identical": data["MTOC.SDL"]["same_bytes"]}
 
 
@@ -151,15 +158,34 @@ def analyze(releases: dict[str, dict[str, bytes]]) -> dict:
     profiles = {name: profile(releases[name]) for name in names}
     comparisons = [{"left": a, "right": b, **compare(releases[a], releases[b])}
                    for a, b in combinations(names, 2)]
+    common_init_words = []
+    for offset in range(0, 0x50, 4):
+        observed = {int.from_bytes(releases[name]["INIT.SDL"][offset:offset + 4], "big")
+                    for name in names}
+        if len(observed) == 1:
+            common_init_words.append({
+                "offset": offset, "be32": next(iter(observed)),
+                "interpretation": "unassigned_binary_field"})
+    invariants = {
+        "sample_release_count": len(names),
+        "all_mtoc_byte_identical": (
+            len({profiles[name]["files"]["MTOC.SDL"]["sha256"] for name in names}) == 1),
+        "all_region_equals_regions": all(
+            profiles[name]["region_equals_regions"] for name in names),
+        "all_init_catalog_matches_own_mtoc": all(
+            profiles[name]["init_mtoc_catalog_slice_identical"] for name in names),
+        "common_init_be32_first_0x50": common_init_words,
+    }
     return {
-        "schema": "oem-cross-version-iter006-v1",
+        "schema": "oem-cross-version-iter007-v1",
         "evidence_type": "original_bytes_not_generated_0_sdl",
         "releases": profiles, "comparisons": comparisons,
+        "cross_release_invariants": invariants,
         "limitations": [
             "Index-to-next-candidate gaps are not an authenticated ucaParcelSizes table",
             "Header candidates do not prove full parcel structure",
-            "Two releases cannot prove a field is invariant across all OEM versions",
-            "Identical MTOC is a two-release observation, not a global constant",
+            "Cross-release invariants apply only to the supplied sample, not all OEM versions",
+            "Exact relocated INIT sections do not establish OEM boot semantics",
         ],
     }
 
@@ -179,6 +205,16 @@ def markdown(report: dict) -> str:
     for filename in ("BENELUX0.SDL", "FRANCE0.SDL", "CARTOTOP.SDL"):
         vals = [str(len(report["releases"][n]["headers"][filename])) for n in names]
         lines.append("| " + filename + " | " + " | ".join(vals) + " |")
+    if "cross_release_invariants" in report:
+        inv = report["cross_release_invariants"]
+        lines += ["", "## Cross-release observations", "",
+                  "- MTOC identical across all samples: " + str(inv["all_mtoc_byte_identical"]),
+                  "- REGION matches REGIONS within each sample: " + str(inv["all_region_equals_regions"]),
+                  "- INIT catalog slice matches MTOC within each sample: " +
+                  str(inv["all_init_catalog_matches_own_mtoc"]),
+                  "- Constant BE32 words in INIT first 0x50: " +
+                  ", ".join(f"0x{w['offset']:X}=0x{w['be32']:X}"
+                            for w in inv["common_init_be32_first_0x50"])]
     for rel in names:
         item = report["releases"][rel]
         lines += ["", "## " + rel, "",
