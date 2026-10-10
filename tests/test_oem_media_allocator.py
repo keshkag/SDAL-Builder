@@ -117,7 +117,8 @@ class MediaSizeFieldTests(unittest.TestCase):
         t=MediaSizeTable(9,(3,8,4))
         self.assertEqual(t.sector_bytes,512)
         self.assertEqual(t.bytes_for(2),2048)
-        self.assertEqual(t.best_index(1500),2)
+        self.assertEqual(t.best_index(1500),0)
+        self.assertEqual(t.best_index(1600),2)
         self.assertEqual(t.best_index(2500),1)
         with self.assertRaisesRegex(MediaLayoutError,"fits"):
             t.best_index(5000)
@@ -161,7 +162,7 @@ class RegionAllocatorTests(unittest.TestCase):
                   ParcelRequest("b",0,500,size_index=24,fixed_offset=0x2800))
         with self.assertRaisesRegex(MediaLayoutError,"overlaps"):
             allocate_region(table,requests,prefix_bytes=0x2000)
-        with self.assertRaisesRegex(MediaLayoutError,"fits"):
+        with self.assertRaisesRegex(MediaLayoutError,"does not fit"):
             allocate_region(table,(ParcelRequest("a",1,5000,size_index=24),),
                             prefix_bytes=0x2000)
         with self.assertRaisesRegex(MediaLayoutError,"region prefix"):
